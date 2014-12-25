@@ -1,0 +1,64 @@
+#!/usr/bin/env php
+<?php
+
+// set to run indefinitely if needed
+set_time_limit(0);
+
+use Reliv\Deploy\Service\ConfigService;
+use Reliv\Deploy\Application;
+use Symfony\Component\EventDispatcher\EventDispatcher;
+
+// include the composer autoloader
+require_once __DIR__ . '/vendor/autoload.php';
+
+
+// Config Setup
+$configPaths = array(
+    __DIR__.'/config/commands.php',
+    __DIR__.'/config/global.php',
+    __DIR__.'/config/local.php',
+    __DIR__.'/etc/deploy',
+);
+
+$configService = new ConfigService($configPaths);
+
+// Symfony Events
+$dispatcher = new EventDispatcher();
+
+// Setup Application
+$app = new Application();
+$app->setDispatcher($dispatcher);
+
+// Start Logger
+$loggerFactory = new \Reliv\Deploy\Factory\LoggerFactory($app->getOutput());
+
+$appLogger = $loggerFactory->getLogger('Application', $configService->getDefaultConfig());
+\Monolog\ErrorHandler::register($appLogger);
+
+$appLogger->debug('Main Config: '.print_r($configService->getMainConfig()->toArray(), true));
+
+// Add Commands to CLI
+$commands = $configService->getCommands();
+$appLogger->debug('Configured Commands: '.print_r($commands->toArray(), true));
+
+foreach ($commands as $commandClass) {
+    if (!class_exists($commandClass)) {
+        $appLogger->warning('Class not found or not loaded for '.$commandClass);
+        $appLogger->debug('Skipping '.$commandClass);
+        continue;
+    }
+
+    if (!in_array('Reliv\Deploy\Command\CommandInterface', class_implements($commandClass))) {
+        $appLogger->warning('Class '.$commandClass.' is not an instance of \Reliv\Deploy\Command\CommandInterface');
+        $appLogger->debug('Skipping '.$commandClass);
+        continue;
+    }
+
+    $command = new $commandClass($configService, $loggerFactory);
+
+    $appLogger->debug('Adding Command: '.$commandClass);
+    $app->add($command);
+}
+
+// Start the App
+$app->run();
