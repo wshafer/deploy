@@ -23,7 +23,8 @@ return array(
             'name' => 'R-Writer',
             'Repo' => array(
                 'type' => 'git',
-                'origin' => 'https://github.com/wshafer/RelivSkeletonApplication.git',
+                //'origin' => 'https://wshafer:Y3st3erDay@github.com/wshafer/RelivSkeletonApplication.git',
+                'origin' => '/www/apps/rwriter',
                 'branch' => 'master',
             ),
             'Deploy' => array(

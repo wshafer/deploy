@@ -55,7 +55,12 @@ class Application
     {
         $this->logger->info('Checking Application '.$this->appName);
 
-        $this->gitService->
+        $repository = $this->gitService->getRepository($this->appConfig['Repo']['origin']);
+
+        $commits = $repository->getLatestCommit($this->appConfig['Repo']['branch']);
+
+        print_r($commits);
+        exit;
 
         if (!$this->updated) {
             $this->logger->notice('Application '.$this->appName.' is current.  Nothing to update.');
