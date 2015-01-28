@@ -1,5 +1,21 @@
 <?php
-
+/**
+ * Monolog Factory Service
+ *
+ * Monolog Factory Service
+ *
+ * PHP version 5.4
+ *
+ * LICENSE: No License yet
+ *
+ * @category  Reliv
+ * @package   Deploy
+ * @author    Westin Shafer <wshafer@relivinc.com>
+ * @copyright 2012 Reliv International
+ * @license   License.txt New BSD License
+ * @version   GIT: <git_id>
+ * @link      http://github.com/reliv
+ */
 namespace Reliv\Deploy\Factory;
 
 use Reliv\Deploy\Monolog\Formatter\SymfonyConsoleFormatter;
@@ -9,6 +25,19 @@ use Monolog\Logger;
 use Symfony\Component\Console\Output\OutputInterface;
 use Zend\Config\Config;
 
+/**
+ * Monolog Factory Service
+ *
+ * Monolog Factory Service
+ *
+ * @category  Reliv
+ * @package   Deploy
+ * @author    Westin Shafer <wshafer@relivinc.com>
+ * @copyright 2012 Reliv International
+ * @license   License.txt New BSD License
+ * @version   Release: 1.0
+ * @link      http://github.com/reliv
+ */
 class LoggerFactory
 {
     protected $output;

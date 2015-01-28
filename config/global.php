@@ -12,7 +12,6 @@ return array(
             'executable' => trim(`which git`),
             'commitFile' => '.current_release',
             'branch' => 'master',
-//            'tags' => '/\d{4}\.\d{2}.*/'
         ),
         'deploy' => array(
             'user' => 'www-data',
