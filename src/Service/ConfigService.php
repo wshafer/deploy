@@ -3,40 +3,46 @@
 namespace Reliv\Deploy\Service;
 
 
+use Reliv\Deploy\Exception\InvalidApplicationConfigException;
+use Reliv\Deploy\Exception\InvalidSystemConfigException;
 use Zend\Config\Config;
 
 class ConfigService
 {
-    protected $mainConfig;
-    protected $defaultConfig;
-    protected $appsConfig;
-    protected $mergedAppConfigs = array();
+    protected $rawConfig;
+    protected $mergedConfig;
     protected $configPaths = array();
 
     public function __construct($configPaths)
     {
         $this->configPaths = $configPaths;
+        $this->rawConfig = $this->loadConfigs();
     }
 
+    /**
+     * @return Config
+     */
+    public function getRawConfig()
+    {
+        return $this->rawConfig;
+    }
+
+    /**
+     * @return Config
+     */
     public function getMainConfig()
     {
-        if (!$this->mainConfig) {
-            $this->mainConfig = $this->loadConfigs();
-        }
-
-        return $this->mainConfig;
+        return $this->getMergeConfigs();
     }
 
+    /**
+     * @return Config
+     */
     public function getDefaultConfig()
     {
-        $mainConfig = $this->getMainConfig();
-
-        if (!$this->defaultConfig) {
-            $defaultConfig = new Config($mainConfig->get('Default', array())->toArray());
-            $this->defaultConfig = $defaultConfig;
-        }
-
-        return $this->defaultConfig;
+        $rawConfig = $this->getRawConfig();
+        $defaultConfig = $rawConfig->get('default', new Config(array()));
+        return $defaultConfig;
     }
 
     /**
@@ -44,22 +50,7 @@ class ConfigService
      */
     public function getAppsConfig()
     {
-        $mainConfig = $this->getMainConfig();
-
-        if (!$this->appsConfig) {
-            $this->appsConfig = $mainConfig->get('Apps', new Config(array()));
-
-            /**
-             * @var string $appName
-             * @var Config $appConfig
-             */
-            foreach ($this->appsConfig as $appName => $appConfig)
-            {
-                $appConfig->merge($this->getAppConfig($appName));
-            }
-        }
-
-        return $this->appsConfig;
+        return $this->getMergeConfigs()->get('apps', new Config(array()));
     }
 
     /**
@@ -68,21 +59,17 @@ class ConfigService
      */
     public function getAppConfig($name)
     {
-        if (!isset($this->mergedAppConfigs[$name])) {
-            $appsConfig = $this->getAppsConfig();
-            $appConfigOverrides = $appsConfig->get($name, new Config(array()));
-            $appConfig = new Config($this->getDefaultConfig()->toArray());
-            $appConfig->merge($appConfigOverrides);
-            $this->mergedAppConfigs[$name] = $appConfig;
-        }
+        return $this->getAppsConfig()->get($name, new Config(array()));
+    }
 
-        return $this->mergedAppConfigs[$name];
+    public function getRepositoryConfigs($repoName, $applicationName)
+    {
+        return $this->getAppConfig($applicationName)->get($repoName, new Config(array()));
     }
 
     public function getCommands()
     {
-        $mainConfig = $this->getMainConfig();
-        return $mainConfig->get('Commands', new Config(array()));
+        return $this->getMergeConfigs()->get('commands', new Config(array()));
     }
 
     protected function loadConfigs()
@@ -98,5 +85,102 @@ class ConfigService
         }
 
         return $mainConfig;
+    }
+
+    /**
+     * @return Config
+     */
+    protected function getMergeConfigs()
+    {
+        if ($this->mergedConfig) {
+            return $this->mergedConfig;
+        }
+
+        $this->mergedConfig = new Config($this->rawConfig->toArray());
+
+        $appsConfig = $this->mergedConfig->get('apps', new Config(array()));
+
+        /**
+         * @var string $appName
+         * @var Config $appConfig
+         */
+        foreach ($appsConfig as $appName => $appConfig)
+        {
+            $defaultConfig = $this->getDefaultConfig();
+            $defaultClone = new Config($defaultConfig->toArray());
+            $defaultClone->merge($appConfig);
+            $appConfig->merge($defaultClone);
+            $this->validateAppConfig($appName, $appConfig);
+
+            $reposConfig = $appConfig->get('repositories', new Config(array()));
+
+            /**
+             * @var string $repoName
+             * @var Config $repoConfig
+             */
+            foreach ($reposConfig as $repoName => $repoConfig) {
+                $repoDefaults = $defaultConfig->get($repoConfig['type'], new Config(array()));
+                $repoDefaultsClone = new Config($repoDefaults->toArray());
+                $repoDefaultsClone->merge($repoConfig);
+                $repoConfig->merge($repoDefaultsClone);
+
+                $this->validateRepoConifg($appName, $repoName, $repoConfig);
+            }
+        }
+
+        return $this->mergedConfig;
+    }
+
+    protected function validateAppConfig($name, $config)
+    {
+        if (empty($config['deploy'])) {
+            throw new InvalidSystemConfigException(
+                'No Deploy config found in configuration.'
+            );
+        }
+
+        if (empty($config['deploy']['user'])) {
+            throw new InvalidSystemConfigException(
+                'No System User defined for '.$name
+            );
+        }
+
+        if (empty($config['deploy']['group'])) {
+            throw new InvalidSystemConfigException(
+                'No System Group defined for '.$name
+            );
+        }
+
+        if (empty($config['deploy']['location'])) {
+            throw new InvalidSystemConfigException(
+                'No Deploy location defined for '.$name
+            );
+        }
+
+        if (empty($config['deploy']['symlink'])) {
+            throw new InvalidApplicationConfigException(
+                'No deploy link defined in application config for '.$name
+            );
+        }
+
+        if (empty($config['repositories'])) {
+            throw new InvalidApplicationConfigException(
+                'No Repositories defined in application config for '.$name
+            );
+        }
+    }
+
+    protected function validateRepoConifg($appName, $repoName, $config) {
+        if (empty($config['type'])) {
+            throw new InvalidApplicationConfigException(
+                'No Repositories Type Defined in application config for '.$appName
+            );
+        }
+
+        if (empty($config['directory'])) {
+            throw new InvalidApplicationConfigException(
+                'No deploy directory defined in application config for '.$appName
+            );
+        }
     }
 }

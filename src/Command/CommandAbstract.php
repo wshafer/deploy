@@ -50,30 +50,11 @@ abstract class CommandAbstract extends Command implements CommandInterface
 
         $application = new Application($name,
             $config,
-            $this->getGitService(),
             $applicationLogger
         );
 
         return $application;
     }
 
-    protected function getGitService()
-    {
 
-        if ($this->gitService instanceof Git) {
-            return $this->gitService;
-        }
-
-        $config = $this->configService->getDefaultConfig();
-
-        if (empty($config['Git']['executable'])) {
-            throw new InvalidSystemConfigException(
-                'Unable to find Git Executable in config'
-            );
-        }
-
-        $this->gitService = new Git($config['Git']['executable']);
-
-        return $this->gitService;
-    }
 }

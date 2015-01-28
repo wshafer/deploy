@@ -1,6 +1,16 @@
 #!/usr/bin/env php
 <?php
 
+$repositories = array(
+    'Main' => 'b0cdf06b2671d20e11046ff5d7cda01cc3746bfb',
+    'Rcm' => 'ad200cfd10d49fe35d1b5a62f918c0238f54f5da',
+    'RcmPlugins' => 'ad200cfd10d49fe35d1b5a62f918c0238f54f5da',
+    'RcmUser' => 'dbf0b5d616b6e6f25edad3a5d18171ebf50c2a5b',
+    'ElFinder' => 'b4c4d18fadc71cfb89de1c0e20dbb5677da5cb99',
+);
+
+//print serialize($repositories);
+//exit;
 // set to run indefinitely if needed
 set_time_limit(0);
 
@@ -39,6 +49,7 @@ $appLogger->debug('Main Config: '.print_r($configService->getMainConfig()->toArr
 
 // Add Commands to CLI
 $commands = $configService->getCommands();
+
 $appLogger->debug('Configured Commands: '.print_r($commands->toArray(), true));
 
 foreach ($commands as $commandClass) {

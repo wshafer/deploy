@@ -1,7 +1,7 @@
 <?php
 
 return array(
-    'Commands' => array(
+    'commands' => array(
         'deploy' => '\Reliv\Deploy\Command\Deploy',
     )
 );
