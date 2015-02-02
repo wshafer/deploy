@@ -38,7 +38,7 @@ class SymfonyConsoleEventSubscriber extends EventSubscriberAbstract
 
         $force = $input->getOption('force');
 
-        if ($commandName == 'status' || $force) {
+        if ($commandName == 'status' || $commandName == 'auto' || $force) {
             return;
         }
 
@@ -82,7 +82,7 @@ class SymfonyConsoleEventSubscriber extends EventSubscriberAbstract
         $commandName = $event->getCommand()->getName();
         $force = $event->getInput()->getOption('force');
 
-        if ($commandName == 'status' || $force) {
+        if ($commandName == 'status' || $commandName == 'auto' || $force) {
             return;
         }
 

@@ -211,10 +211,11 @@ class EventHelper
      */
     public function runCommand($outputTo, $command, Array $args = array())
     {
-        $args = array_merge(array('deploy', $command), $args, array('-f'));
+        $args = array_merge(array('deploy', $command), $args);
         $input = new ArgvInput($args);
 
         $output = new XmppOutput($this->getClient(), $outputTo);
+        $output->write("Starting command: ".$command);
         $this->event->getCommand()->runAdditionalCommand($input, $output);
     }
 }
