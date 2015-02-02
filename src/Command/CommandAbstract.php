@@ -131,7 +131,6 @@ abstract class CommandAbstract extends Command implements CommandInterface
      */
     public function runAdditionalCommand(InputInterface $input, OutputInterface $output)
     {
-
         $application = $this->getApplication();
         $commandName = $input->getFirstArgument();
 
@@ -148,8 +147,10 @@ abstract class CommandAbstract extends Command implements CommandInterface
         try {
             $application->doRun($input, $output);
         } catch (\Exception $e) {
-            $this->getCommandLogger()->error($e->getMessage());
+            $this->getCommandLogger()->error(
+                'Exception thrown while running command: '.$commandName
+                .' in file '.$e->getFile().' on line '.$e->getLine().' Message: '.$e->getMessage()
+            );
         }
-
     }
 }
