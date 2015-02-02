@@ -6,7 +6,7 @@
  *
  * PHP version 5.4
  *
- * LICENSE: No License yet
+ * LICENSE: License.txt New BSD License
  *
  * @category  Reliv
  * @package   Deploy
@@ -18,11 +18,14 @@
  */
 namespace Reliv\Deploy\Command;
 
-
 use Psr\Log\LoggerInterface;
-use Reliv\Deploy\Factory\LoggerFactory;
+use Reliv\Deploy\Service\LoggerService;
 use Reliv\Deploy\Service\ConfigService;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Input\ArrayInput;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\EventDispatcher\EventDispatcher;
 
 /**
  * Command Abstract
@@ -42,8 +45,11 @@ abstract class CommandAbstract extends Command implements CommandInterface
     /** @var ConfigService  */
     protected $configService;
 
-    /** @var LoggerFactory  */
+    /** @var LoggerService  */
     protected $loggerService;
+
+    /** @var EventDispatcher */
+    protected $eventDispatcher;
 
     /** @var LoggerInterface  */
     protected $logger;
@@ -52,35 +58,37 @@ abstract class CommandAbstract extends Command implements CommandInterface
     /**
      * Constructor
      *
-     * @param ConfigService $configService Config Service
-     * @param LoggerFactory $loggerService Factory for logging service
-     * @param string        $name          Command Name
+     * @param ConfigService   $configService   Config Service
+     * @param LoggerService   $loggerService   Factory for logging service
+     * @param EventDispatcher $eventDispatcher Event Dispatcher
+     * @param string          $name            Command Name
      */
     public function __construct(
         ConfigService $configService,
-        LoggerFactory $loggerService,
+        LoggerService $loggerService,
+        EventDispatcher $eventDispatcher,
         $name = null
     ) {
         parent::__construct($name);
         $this->configService = $configService;
         $this->loggerService = $loggerService;
+        $this->eventDispatcher = $eventDispatcher;
     }
 
     /**
      * Get the logger for the command
      *
-     * @return \Monolog\Logger|LoggerInterface
+     * @return \Psr\Log\LoggerInterface
      */
-    protected function getCommandLogger()
+    public function getCommandLogger()
     {
         if ($this->logger instanceof LoggerInterface) {
             return $this->logger;
         }
 
-        return $this->loggerService->getLogger(
-            'Command.'.$this->getName(),
-            $this->getConfigService()->getDefaultConfig()
-        );
+        $this->logger = $this->loggerService->getLogger('Command.'.$this->getName());
+
+        return $this->logger;
     }
 
     /**
@@ -88,7 +96,7 @@ abstract class CommandAbstract extends Command implements CommandInterface
      *
      * @return ConfigService
      */
-    protected function getConfigService()
+    public function getConfigService()
     {
         return $this->configService;
     }
@@ -96,10 +104,52 @@ abstract class CommandAbstract extends Command implements CommandInterface
     /**
      * Get the logger service
      *
-     * @return LoggerFactory
+     * @return LoggerService
      */
-    protected function getLoggerService()
+    public function getLoggerService()
     {
         return $this->loggerService;
+    }
+
+    /**
+     * Get the console event dispatcher
+     *
+     * @return EventDispatcher
+     */
+    public function getEventDispatcher()
+    {
+        return $this->eventDispatcher;
+    }
+
+    /**
+     * Run an additional command
+     *
+     * @param InputInterface  $input  Input args
+     * @param OutputInterface $output Output Handler
+     *
+     * @return void
+     */
+    public function runAdditionalCommand(InputInterface $input, OutputInterface $output)
+    {
+
+        $application = $this->getApplication();
+        $commandName = $input->getFirstArgument();
+
+        try {
+            $application->get($commandName);
+        } catch (\InvalidArgumentException $e) {
+            $this->getCommandLogger()->warning('Command '.$commandName.' does not exist.');
+
+            $input = new ArrayInput(array('command' => 'help'));
+        }
+
+        $this->getCommandLogger()->debug('Running Command '.$commandName);
+
+        try {
+            $application->doRun($input, $output);
+        } catch (\Exception $e) {
+            $this->getCommandLogger()->error($e->getMessage());
+        }
+
     }
 }

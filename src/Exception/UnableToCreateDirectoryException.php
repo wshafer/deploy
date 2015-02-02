@@ -6,7 +6,7 @@
  *
  * PHP version 5.4
  *
- * LICENSE: No License yet
+ * LICENSE: License.txt New BSD License
  *
  * @category  Reliv
  * @package   Deploy

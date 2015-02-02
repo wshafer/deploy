@@ -1,13 +1,51 @@
 <?php
-
+/**
+ * Git Repo VCS driver for Reliv Deploy
+ *
+ * Git Repo VCS driver for Reliv Deploy
+ *
+ * PHP version 5.4
+ *
+ * LICENSE: BSD
+ *
+ * @category  Reliv
+ * @package   Deploy
+ * @author    Westin Shafer <wshafer@relivinc.com>
+ * @copyright 2012 Reliv International
+ * @license   License.txt New BSD License
+ * @version   GIT: <git_id>
+ * @link      http://github.com/reliv
+ */
 namespace Reliv\Deploy\Vcs;
 
 use Psr\Log\LoggerInterface;
 use Reliv\Deploy\Exception\InvalidApplicationConfigException;
 use Reliv\Deploy\Exception\InvalidSystemConfigException;
+use Reliv\Deploy\Service\LoggerService;
 use Reliv\Git\Service\Git as GitService;
 use Reliv\Git\Service\Repository;
+use Zend\Config\Config;
 
+/**
+ * Git Repo VCS driver for Reliv Deploy
+ *
+ * Git Repo VCS driver for Reliv Deploy.  This driver will preform all git related operations for repos that need
+ * to use Git for deployment.
+ *
+ * PHP version 5.4
+ *
+ * LICENSE: BSD
+ *
+ * @category  Reliv
+ * @package   Deploy
+ * @author    Westin Shafer <wshafer@relivinc.com>
+ * @copyright 2012 Reliv International
+ * @license   License.txt New BSD License
+ * @version   Release: 1.0
+ * @link      https://github.com/reliv
+ *
+ * @SuppressWarnings(PHPMD.ExcessiveClassComplexity)
+ */
 class GitRepo implements VcsInterface
 {
     /**
@@ -31,6 +69,11 @@ class GitRepo implements VcsInterface
     protected $nextReleaseAppDir;
 
     /**
+     * @var LoggerService
+     */
+    protected $loggerService;
+
+    /**
      * @var LoggerInterface
      */
     protected $logger;
@@ -49,21 +92,30 @@ class GitRepo implements VcsInterface
 
     protected $repoReleaseNumber;
 
-    protected $deployedRevisionNumber;
-
     protected $deployBranchOrTag;
 
+    protected $deployedInfo;
 
+
+    /**
+     * Constructor
+     */
     public function __construct()
     {
-        if (!class_exists('\Reliv\Git\Service\Git') || !class_exists('\Reliv\Git\Service\Repository'))
-        {
+        if (!class_exists('\Reliv\Git\Service\Git')
+            || !class_exists('\Reliv\Git\Service\Repository')
+        ) {
             throw new \RuntimeException(
                 "Please make sure to install the Git Service Wrapper.  `composer require reliv/git`"
             );
         }
     }
 
+    /**
+     * Preform the update.
+     *
+     * @return void
+     */
     public function update()
     {
         $logger = $this->getLogger();
@@ -77,16 +129,58 @@ class GitRepo implements VcsInterface
 
         $commitFile = $targetDir.DIRECTORY_SEPARATOR.$this->getCommitFile();
 
-        file_put_contents($commitFile, $this->getLatestRepoVersionNumber());
+        $contents = array(
+            'commit' => $this->getLatestRepoVersionNumber(),
+            'date' => new \DateTime()
+        );
+
+        file_put_contents($commitFile, serialize($contents));
     }
 
+    /**
+     * Get the repos current deployment status
+     *
+     * @return Status
+     */
+    public function getStatus()
+    {
+        return new Status(
+            $this->getLatestRepoVersionNumber(),
+            $this->getDeployedVersionNumber(),
+            $this->getDeployedDate(),
+            $this->doCheckForUpdate()
+        );
+    }
+    /**
+     * Does the application need an update from the repository?
+     *
+     * @return bool
+     */
     public function needsUpdate()
     {
         $logger = $this->getLogger();
 
+        $logger->info('Deployed Date     : '.$this->getDeployedDate());
+        $logger->info('Deployed Commit   : '.$this->getDeployedVersionNumber());
+        $logger->info('Repository Commit : '.$this->getLatestRepoVersionNumber());
+
+        return $this->doCheckForUpdate();
+    }
+
+    /**
+     * Do the check to see if the deployment needs an update.
+     *
+     * @return bool
+     */
+    protected function doCheckForUpdate()
+    {
+        $logger = $this->getLogger();
         $repoCurrentDir = $this->getCurrentReleaseDirForRepo();
 
-        $logger->debug('Checking to see if repo directory exists for '.$this->name.' at: '.$repoCurrentDir);
+        $logger->debug(
+            'Checking to see if repo directory exists at: '.$repoCurrentDir
+        );
+
         if (!is_dir($repoCurrentDir)) {
             $logger->debug('Repo Directory does not exist.  Needs updates.');
             return true;
@@ -94,37 +188,71 @@ class GitRepo implements VcsInterface
 
         $logger->debug('Repo Directory exists.  Checking Revisions.');
 
-        $remoteCommitHash = $this->getLatestRepoVersionNumber();
-        $logger->info('Repository Commit : '.$remoteCommitHash);
-
         $deployedCommit = $this->getDeployedVersionNumber();
-        $logger->info('Deployed Commit   : '.$deployedCommit);
+        $remoteCommitHash = $this->getLatestRepoVersionNumber();
 
         if ($remoteCommitHash != $deployedCommit) {
             return true;
         }
-
-        return false;
     }
 
+    /**
+     * Get the Deployed version.  This is stored in a text file in the root folder of the application directory.
+     * The filename can be configured in the main configuration file.
+     *
+     * @return null|string
+     */
     protected function getDeployedVersionNumber()
     {
-        if ($this->deployedRevisionNumber) {
-            return $this->deployedRevisionNumber;
-        };
+        $deployedInfo = $this->getDeployedInfo();
+
+        if (empty($deployedInfo['commit'])) {
+            return null;
+        }
+
+        return $deployedInfo['commit'];
+    }
+
+    protected function getDeployedDate()
+    {
+        $deployedInfo = $this->getDeployedInfo();
+
+        if (empty($deployedInfo['date']) || !$deployedInfo['date'] instanceof \DateTime) {
+            return null;
+        }
+
+        /** @var \DateTime $date */
+        $date = $deployedInfo['date'];
+
+        $dateFormat = $this->getConfig()->get('dateFormat', 'c');
+
+        return $date->format($dateFormat);
+    }
+
+    protected function getDeployedInfo()
+    {
+        if ($this->deployedInfo) {
+            return $this->deployedInfo;
+        }
 
         $repoCurrentDir = $this->getCurrentReleaseDirForRepo();
         $commitFile = $repoCurrentDir.DIRECTORY_SEPARATOR.$this->getCommitFile();
 
         if (!is_dir($repoCurrentDir) || !is_file($commitFile)) {
-            return null;
+            return array();
         }
 
-        $this->deployedRevisionNumber = trim(file_get_contents($commitFile));
+        $this->deployedInfo = unserialize(trim(file_get_contents($commitFile)));
 
-        return $this->deployedRevisionNumber;
+        return $this->deployedInfo;
     }
 
+    /**
+     * Get the latest commit version for the configured branch or latest tag number.  The branch or tag can be
+     * configured in the main configuration file for the repo.
+     *
+     * @return mixed
+     */
     protected function getLatestRepoVersionNumber()
     {
         if (!empty($this->repoReleaseNumber)) {
@@ -147,12 +275,24 @@ class GitRepo implements VcsInterface
         return $this->repoReleaseNumber;
     }
 
-    public function setConfig($config)
+    /**
+     * Set config.  This should be called when constructing the class.
+     *
+     * @param Config $config Repository Config
+     *
+     * @return void
+     */
+    public function setConfig(Config $config)
     {
         $this->validateConfig($config);
         $this->config = $config;
     }
 
+    /**
+     * Get the repository config.
+     *
+     * @return Config
+     */
     public function getConfig()
     {
         if (!$this->config) {
@@ -164,11 +304,23 @@ class GitRepo implements VcsInterface
         return $this->config;
     }
 
+    /**
+     * Set the Applications Current Release Directory.  This should be set when constructing the class.
+     *
+     * @param string $dir Path to the Applications Current Release Directory.
+     *
+     * @return void
+     */
     public function setCurrentReleaseAppDir($dir)
     {
         $this->currentReleaseAppDir = $dir;
     }
 
+    /**
+     * Get the applications current release directory.
+     *
+     * @return string Path to the applications current release directory.
+     */
     public function getCurrentReleaseAppDir()
     {
         if (!$this->currentReleaseAppDir) {
@@ -180,11 +332,23 @@ class GitRepo implements VcsInterface
         return $this->currentReleaseAppDir;
     }
 
+    /**
+     * Set the target directory for the next release.  This should be set when constructing the class.
+     *
+     * @param string $dir Target directory for the next release
+     *
+     * @return void
+     */
     public function setNextReleaseAppDir($dir)
     {
         $this->nextReleaseAppDir = $dir;
     }
 
+    /**
+     * Get the target directory for the next release.
+     *
+     * @return String Target Directory
+     */
     public function getNextReleaseDir()
     {
         if (!$this->nextReleaseAppDir) {
@@ -196,23 +360,57 @@ class GitRepo implements VcsInterface
         return $this->nextReleaseAppDir;
     }
 
-    public function setLogger(LoggerInterface $logger)
+    /**
+     * Set a PSR3 logger to use during deployment.  This should be set when constructing the class.
+     *
+     * @param LoggerService $loggerService Reliv Deploy Logger Factory
+     *
+     * @return void
+     */
+    public function setLoggerService(LoggerService $loggerService)
     {
-        $this->logger = $logger;
+        $this->loggerService = $loggerService;
     }
 
+    /**
+     * Get the current PSR3 compatible logger.
+     *
+     * @return LoggerService
+     */
+    public function getLoggerService()
+    {
+        if (!$this->loggerService) {
+            throw new \RuntimeException(
+                "No logger factory into git helper"
+            );
+        }
+
+        return $this->loggerService;
+    }
+
+    /**
+     * Get the current PSR3 compatible logger.
+     *
+     * @return LoggerInterface
+     */
     public function getLogger()
     {
         if (!$this->logger) {
-            throw new \RuntimeException(
-                "No logger passed into git helper"
-            );
+            $this->logger = $this->getLoggerService()->getLogger($this->getName());
         }
 
         return $this->logger;
     }
 
-    protected function validateConfig($config)
+    /**
+     * Validate the passed in config.
+     *
+     * @param Config $config Config object to validate
+     *
+     * @return void
+     * @throws InvalidApplicationConfigException
+     */
+    protected function validateConfig(Config $config)
     {
         if (empty($config['type'])) {
             throw new InvalidApplicationConfigException(
@@ -251,6 +449,11 @@ class GitRepo implements VcsInterface
         }
     }
 
+    /**
+     * Get the current release directory for the repo.
+     *
+     * @return string
+     */
     protected function getCurrentReleaseDirForRepo()
     {
         $currentReleaseAppDir = $this->getCurrentReleaseAppDir();
@@ -264,6 +467,11 @@ class GitRepo implements VcsInterface
         return $currentReleaseAppDir;
     }
 
+    /**
+     * Get the target directory for next release for this repo.
+     *
+     * @return string
+     */
     protected function getNextReleaseDirForRepo()
     {
         $nextReleaseAppDir = $this->getNextReleaseDir();
@@ -273,12 +481,23 @@ class GitRepo implements VcsInterface
         return $nextRepoDir;
     }
 
+    /**
+     * Get the repo directory.  This can be set in the repo config, and should point to a relative directory
+     * from the application directory.
+     *
+     * @return string
+     */
     protected function getRepoDir()
     {
         $config = $this->getConfig();
-        return trim($config['directory'],"\t\n\r\0\x0B/\\");
+        return trim($config['directory'], "\t\n\r\0\x0B/\\");
     }
 
+    /**
+     * Get the configured deployment branch or tag to use for deployment
+     *
+     * @return mixed|null
+     */
     protected function getDeploymentBranchOrTag()
     {
         if ($this->deployBranchOrTag) {
@@ -297,6 +516,11 @@ class GitRepo implements VcsInterface
         return $this->deployBranchOrTag;
     }
 
+    /**
+     * Get the latest tag based on the tag pattern to look for defined by the config file.
+     *
+     * @return mixed|null
+     */
     protected function getLatestDeployTag()
     {
         $config = $this->getConfig();
@@ -314,6 +538,12 @@ class GitRepo implements VcsInterface
         return array_pop($matches);
     }
 
+    /**
+     * Get the type of branch to use for deployment.  Are we using a Branch or Tag?
+     *
+     * @return string
+     * @throws InvalidApplicationConfigException
+     */
     protected function getReleaseBranchType()
     {
         $config = $this->getConfig();
@@ -340,19 +570,40 @@ class GitRepo implements VcsInterface
             return $this->repoService;
         }
 
-        $config = $this->getConfig();
+
         $gitService = $this->getGitService();
-        $this->repoService = $gitService->getRepository($config['origin']);
+        $this->repoService = $gitService->getRepository($this->getRepoOrigin());
 
         return $this->repoService;
     }
 
+    /**
+     * Get the origin path
+     *
+     * @return mixed
+     */
+    protected function getRepoOrigin()
+    {
+        $config = $this->getConfig();
+        return $config['origin'];
+    }
+
+    /**
+     * Get the commit filename from the config.
+     *
+     * @return string
+     */
     protected function getCommitFile()
     {
         $config = $this->getConfig();
-        return trim($config['commitFile'],"\t\n\r\0\x0B/\\");
+        return trim($config['commitFile'], "\t\n\r\0\x0B/\\");
     }
 
+    /**
+     * Get the Git Wrapper service.
+     *
+     * @return GitService
+     */
     protected function getGitService()
     {
 
@@ -367,6 +618,14 @@ class GitRepo implements VcsInterface
         return $this->gitService;
     }
 
+    /**
+     * Create a new directory.
+     *
+     * @param string $dir Directory path to create
+     *
+     * @return void
+     * @throws \RuntimeException
+     */
     protected function createDirectory($dir)
     {
         $logger = $this->getLogger();
@@ -381,5 +640,31 @@ class GitRepo implements VcsInterface
         } else {
             $logger->debug('Directory already exists: '.$dir);
         }
+    }
+
+    /**
+     * Set the name of the Repo.  This will be called when constructing the class.
+     *
+     * @param string $name Name of repository
+     *
+     * @return mixed
+     */
+    public function setName($name)
+    {
+        $this->name = $name;
+    }
+
+    /**
+     * Get the repository's name or key
+     *
+     * @return string
+     */
+    public function getName()
+    {
+        if (empty($this->name)) {
+            $this->name = $this->getRepoOrigin();
+        }
+
+        return $this->name;
     }
 }

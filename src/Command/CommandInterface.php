@@ -6,7 +6,7 @@
  *
  * PHP version 5.4
  *
- * LICENSE: No License yet
+ * LICENSE: License.txt New BSD License
  *
  * @category  Reliv
  * @package   Deploy
@@ -19,8 +19,11 @@
 
 namespace Reliv\Deploy\Command;
 
-use Reliv\Deploy\Factory\LoggerFactory;
+use Reliv\Deploy\Service\LoggerService;
 use Reliv\Deploy\Service\ConfigService;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\EventDispatcher\EventDispatcher;
 
 /**
  * Command Interface
@@ -40,9 +43,53 @@ interface CommandInterface
     /**
      * Constructor for commands
      *
-     * @param ConfigService $configService Config Service
-     * @param LoggerFactory $loggerService Logger Service
-     * @param string        $name          Name of command
+     * @param ConfigService   $configService   Config Service
+     * @param LoggerService   $loggerService   Logger Service
+     * @param EventDispatcher $eventDispatcher Event Dispatcher
+     * @param string          $name            Name of command
      */
-    public function __construct(ConfigService $configService, LoggerFactory $loggerService, $name = null);
+    public function __construct(
+        ConfigService   $configService,
+        LoggerService   $loggerService,
+        EventDispatcher $eventDispatcher,
+        $name = null
+    );
+
+    /**
+     * Get the logger for the command
+     *
+     * @return \Psr\Log\LoggerInterface
+     */
+    public function getCommandLogger();
+
+    /**
+     * Get the config service
+     *
+     * @return ConfigService
+     */
+    public function getConfigService();
+
+    /**
+     * Get the logger service
+     *
+     * @return LoggerService
+     */
+    public function getLoggerService();
+
+    /**
+     * Get the console event dispatcher
+     *
+     * @return EventDispatcher
+     */
+    public function getEventDispatcher();
+
+    /**
+     * Run an additional command
+     *
+     * @param InputInterface  $input  Input args
+     * @param OutputInterface $output Output Handler
+     *
+     * @return void
+     */
+    public function runAdditionalCommand(InputInterface $input, OutputInterface $output);
 }

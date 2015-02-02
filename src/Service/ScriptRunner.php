@@ -44,9 +44,10 @@ class ScriptRunner
      *
      * @param string $scriptPath Path to script
      * @param array  $passedVars Variables to pass to the external script
+     *
      * @return mixed
      */
-    public function runScript($scriptPath, Array $passedVars=array())
+    public function runScript($scriptPath, Array $passedVars = array())
     {
         if (!file_exists($scriptPath)) {
             throw new \InvalidArgumentException(

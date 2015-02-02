@@ -1,26 +1,10 @@
 #!/usr/bin/env php
 <?php
-
-$repositories = array(
-    'Main' => 'b0cdf06b2671d20e11046ff5d7cda01cc3746bfb',
-    'Rcm' => 'ad200cfd10d49fe35d1b5a62f918c0238f54f5da',
-    'RcmPlugins' => 'ad200cfd10d49fe35d1b5a62f918c0238f54f5da',
-    'RcmUser' => 'dbf0b5d616b6e6f25edad3a5d18171ebf50c2a5b',
-    'ElFinder' => 'b4c4d18fadc71cfb89de1c0e20dbb5677da5cb99',
-);
-
-//print serialize($repositories);
-//exit;
 // set to run indefinitely if needed
 set_time_limit(0);
 
-use Reliv\Deploy\Service\ConfigService;
-use Reliv\Deploy\Application;
-use Symfony\Component\EventDispatcher\EventDispatcher;
-
 // include the composer autoloader
 require_once __DIR__ . '/vendor/autoload.php';
-
 
 // Config Setup
 $configPaths = array(
@@ -30,46 +14,5 @@ $configPaths = array(
     __DIR__.'/etc/deploy',
 );
 
-$configService = new ConfigService($configPaths);
-
-// Symfony Events
-$dispatcher = new EventDispatcher();
-
-// Setup Application
-$app = new Application();
-$app->setDispatcher($dispatcher);
-
-// Start Logger
-$loggerFactory = new \Reliv\Deploy\Factory\LoggerFactory($app->getOutput());
-
-$appLogger = $loggerFactory->getLogger('Application', $configService->getDefaultConfig());
-\Monolog\ErrorHandler::register($appLogger);
-
-$appLogger->debug('Main Config: '.print_r($configService->getMainConfig()->toArray(), true));
-
-// Add Commands to CLI
-$commands = $configService->getCommands();
-
-$appLogger->debug('Configured Commands: '.print_r($commands->toArray(), true));
-
-foreach ($commands as $commandClass) {
-    if (!class_exists($commandClass)) {
-        $appLogger->warning('Class not found or not loaded for '.$commandClass);
-        $appLogger->debug('Skipping '.$commandClass);
-        continue;
-    }
-
-    if (!in_array('Reliv\Deploy\Command\CommandInterface', class_implements($commandClass))) {
-        $appLogger->warning('Class '.$commandClass.' is not an instance of \Reliv\Deploy\Command\CommandInterface');
-        $appLogger->debug('Skipping '.$commandClass);
-        continue;
-    }
-
-    $command = new $commandClass($configService, $loggerFactory);
-
-    $appLogger->debug('Adding Command: '.$commandClass);
-    $app->add($command);
-}
-
-// Start the App
-$app->run();
+$bootstrap = new \Reliv\Deploy\Bootstrap($configPaths);
+$bootstrap->run();

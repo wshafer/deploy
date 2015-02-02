@@ -27,7 +27,8 @@
         "zendframework/zend-config": "~2.3",
         "symfony/event-dispatcher": "~2.6",
         "symfony/process": "~2.6",
-        "symfony/monolog-bridge": "~2.6"
+        "symfony/monolog-bridge": "~2.6",
+        "abhinavsingh/jaxl": "3.0.0"
     },
     "require-dev": {
         "phpunit/phpunit": "~4.4",

@@ -21,6 +21,8 @@ namespace Reliv\Deploy\Command;
 
 use Reliv\Deploy\Service\Application;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Output\ConsoleOutput;
+use Symfony\Component\Console\Output\NullOutput;
 use Symfony\Component\Console\Output\OutputInterface;
 use Zend\Config\Config;
 
@@ -37,7 +39,7 @@ use Zend\Config\Config;
  * @version   Release: 1.0
  * @link      http://github.com/reliv
  */
-class Deploy extends CommandAbstract
+class Status extends CommandAbstract
 {
     /**
      * Symphony's console config method.  This is used by Symphony to set the command descriptors.
@@ -46,8 +48,8 @@ class Deploy extends CommandAbstract
      */
     protected function configure()
     {
-        $this->setName('deploy')
-            ->setDescription('Deploy an app');
+        $this->setName('status')
+            ->setDescription('Get Deployment Status');
     }
 
     /**
@@ -69,10 +71,15 @@ class Deploy extends CommandAbstract
         $logger->debug('Apps Config: '.print_r($apps->toArray(), true));
 
         foreach ($apps as $appName => $appConfig) {
+            $logger->info('Status of RWriter');
             $logger->debug('Calling the Application service for '.$appName);
             $application = $this->getApplicationHelper($appName, $appConfig);
-            $application->deploy();
+            $statusMessage = $application->getStatusMessage();
             $logger->debug('Control returned from application service of '.$appName);
+
+            $statusMessage[] = "";
+
+            $output->write($statusMessage, true);
         }
     }
 

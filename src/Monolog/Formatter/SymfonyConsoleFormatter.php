@@ -1,14 +1,39 @@
 <?php
-
+/**
+ * Monolog Console Formatter
+ *
+ * Monolog Console Formatter
+ *
+ * PHP version 5.4
+ *
+ * LICENSE: License.txt New BSD License
+ *
+ * @category  Reliv
+ * @package   Deploy
+ * @author    Westin Shafer <wshafer@relivinc.com>
+ * @copyright 2012 Reliv International
+ * @license   License.txt New BSD License
+ * @version   GIT: <git_id>
+ * @link      http://github.com/reliv
+ */
 namespace Reliv\Deploy\Monolog\Formatter;
 
 use Monolog\Formatter\LineFormatter;
 use Monolog\Logger;
 
 /**
- * Formats incoming records for console output by coloring them depending on log level.
+ * Monolog Console Formatter
  *
- * @author Tobias Schultze <http://tobion.de>
+ * Monolog Console Formatter.  Replaces Symfony's standard formatter to allow the correct console output
+ * coloring for messages.  This allows the formatter to work in a more consistent way with Symfony Console logger
+ *
+ * @category  Reliv
+ * @package   Deploy
+ * @author    Westin Shafer <wshafer@relivinc.com>
+ * @copyright 2012 Reliv International
+ * @license   License.txt New BSD License
+ * @version   Release: 1.0
+ * @link      http://github.com/reliv
  */
 class SymfonyConsoleFormatter extends LineFormatter
 {
@@ -20,7 +45,7 @@ class SymfonyConsoleFormatter extends LineFormatter
     const DEBUG  = null;
 
     /**
-     * @var array
+     * @var array Format Level Map. Used to match Monologs error level to color formatting.
      */
     private $formatLevelMap = array(
         Logger::EMERGENCY => self::ERROR,
@@ -34,7 +59,15 @@ class SymfonyConsoleFormatter extends LineFormatter
     );
 
     /**
-     * {@inheritdoc}
+     * Constructor
+     *
+     * @param string $format                     The format of the message
+     * @param string $dateFormat                 The format of the timestamp: one supported by DateTime::format
+     * @param bool   $allowInlineLineBreaks      Whether to allow inline line breaks in log entries
+     * @param bool   $ignoreEmptyContextAndExtra Ignore the Context and Extra formatting tags.
+     * @param array  $formatLevelMap             Custom Format Level mapping
+     *
+     * @SuppressWarnings(PHPMD.LongVariable)
      */
     public function __construct(
         $format = null,
@@ -49,7 +82,11 @@ class SymfonyConsoleFormatter extends LineFormatter
     }
 
     /**
-     * {@inheritdoc}
+     * Formats a log record.
+     *
+     * @param array $record A record to format
+     *
+     * @return mixed The formatted record
      */
     public function format(array $record)
     {
