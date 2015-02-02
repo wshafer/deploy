@@ -73,8 +73,22 @@ class SymfonyConsoleEventSubscriber extends EventSubscriberAbstract
         $pidFile = $this->getPidFile();
 
         if (!$pidFile) {
-            throw new \RuntimeException("No Pid File configured.  Stopping Execution");
+            return;
         }
+
+        /*
+         * Do not remove pid file if forced or status command
+         */
+        $commandName = $event->getCommand()->getName();
+        $force = $event->getInput()->getOption('force');
+
+        if ($commandName == 'status' || $force) {
+            return;
+        }
+
+        /*
+         * Remove Pid File
+         */
 
         if (file_exists($pidFile)) {
             unlink($pidFile);

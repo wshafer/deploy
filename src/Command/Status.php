@@ -20,6 +20,7 @@
 namespace Reliv\Deploy\Command;
 
 use Reliv\Deploy\Service\Application;
+use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\ConsoleOutput;
 use Symfony\Component\Console\Output\NullOutput;
@@ -49,7 +50,12 @@ class Status extends CommandAbstract
     protected function configure()
     {
         $this->setName('status')
-            ->setDescription('Get Deployment Status');
+            ->setDescription('Get Deployment Status')
+            ->addArgument(
+                'application',
+                InputArgument::OPTIONAL,
+                'Application to deploy'
+            );
     }
 
     /**
@@ -70,17 +76,50 @@ class Status extends CommandAbstract
 
         $logger->debug('Apps Config: '.print_r($apps->toArray(), true));
 
+        $appToDeploy = $name = $input->getArgument('application');
+
+        if (strtolower($appToDeploy) == 'all') {
+            $appToDeploy = null;
+        }
+
+        if ($appToDeploy) {
+            if (empty($apps[$appToDeploy])) {
+                $configuredApps = implode(", ", array_keys($apps));
+                $logger->error($appToDeploy.' not found.  Current configured apps: '.$configuredApps);
+                return;
+            }
+
+            $statusMessage = $this->getAppStatus($appToDeploy, $apps[$appToDeploy]);
+            $output->write($statusMessage, true);
+            return;
+        }
+
         foreach ($apps as $appName => $appConfig) {
-            $logger->info('Status of RWriter');
-            $logger->debug('Calling the Application service for '.$appName);
-            $application = $this->getApplicationHelper($appName, $appConfig);
-            $statusMessage = $application->getStatusMessage();
-            $logger->debug('Control returned from application service of '.$appName);
-
-            $statusMessage[] = "";
-
+            $statusMessage =$this->getAppStatus($appName, $appConfig);
             $output->write($statusMessage, true);
         }
+    }
+
+    /**
+     * Get the status message for an application
+     *
+     * @param string $appName   Application name
+     * @param Config $appConfig Application Config
+     *
+     * @return array
+     */
+    protected function getAppStatus($appName, Config $appConfig)
+    {
+        $logger = $this->getCommandLogger();
+        $logger->info('Status of RWriter');
+        $logger->debug('Calling the Application service for '.$appName);
+        $application = $this->getApplicationHelper($appName, $appConfig);
+        $statusMessage = $application->getStatusMessage();
+        $logger->debug('Control returned from application service of '.$appName);
+
+        $statusMessage[] = "";
+
+        return $statusMessage;
     }
 
     /**
