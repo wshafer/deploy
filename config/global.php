@@ -53,11 +53,13 @@ return array(
         ),
 
         'notifications' => array(
-            'defaultReportingLevel' => 'error',
+            'defaultReportingLevel' => 'notice',
             'recipients' => array(
                 array(
                     'jid' => 'wshafer@im.reliv.com',
-                    'reportingLevel' => 'info',
+                ),
+                array(
+                    'jid' => 'rmcnew@im.reliv.com',
                 ),
             )
         ),

@@ -135,6 +135,8 @@ class GitRepo implements VcsInterface
         );
 
         file_put_contents($commitFile, serialize($contents));
+
+        $logger->notice($this->name." deployed to commit :".$this->getLatestRepoVersionNumber());
     }
 
     /**

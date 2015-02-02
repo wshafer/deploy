@@ -143,7 +143,7 @@ class Application
         $logger->info('Checking Application '.$this->appName);
 
         if (!$this->needsUpdate()) {
-            $logger->notice('Application '.$this->appName.' is current.  Nothing to update.');
+            $logger->info('Application '.$this->appName.' is current.  Nothing to update.');
             return;
         }
 
@@ -170,6 +170,7 @@ class Application
 
         @unlink($symlink);
         symlink($releaseToDir, $symlink);
+        $logger->notice('Application "'.$this->appName.'" deployed.');
     }
 
     /**

@@ -46,7 +46,7 @@ class XmppOutput extends Output
         foreach ($recipients as $recipient) {
             $this->client->send_chat_msg(
                 $recipient,
-                $message.($newline ? PHP_EOL : '')
+                gethostname().' - '.$message.($newline ? PHP_EOL : '')
             );
         }
     }

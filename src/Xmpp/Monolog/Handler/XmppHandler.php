@@ -59,7 +59,7 @@ class XmppHandler extends AbstractProcessingHandler
 
             if ($record['level'] >= $reportingLevel) {
                 $message = (string) $record['formatted'];
-                $this->client->send_chat_msg($recipient['jid'], htmlentities($message));
+                $this->client->send_chat_msg($recipient['jid'], $message);
             }
         }
     }

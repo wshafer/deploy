@@ -72,6 +72,8 @@ class Status extends CommandAbstract
         $logger = $this->getCommandLogger();
         $logger->info('starting command');
 
+        $statusMessage = array();
+
         $apps = $this->configService->getAppsConfig();
 
         $logger->debug('Apps Config: '.print_r($apps->toArray(), true));
@@ -84,20 +86,18 @@ class Status extends CommandAbstract
 
         if ($appToDeploy) {
             if (empty($apps[$appToDeploy])) {
-                $configuredApps = implode(", ", array_keys($apps));
-                $logger->error($appToDeploy.' not found.  Current configured apps: '.$configuredApps);
-                return;
+                $configuredApps = implode(", ", array_keys($apps->toArray()));
+                $statusMessage[] = $appToDeploy.' not found.  Current configured apps: '.$configuredApps;
+            } else {
+                $statusMessage = $this->getAppStatus($appToDeploy, $apps[$appToDeploy]);
             }
-
-            $statusMessage = $this->getAppStatus($appToDeploy, $apps[$appToDeploy]);
-            $output->write($statusMessage, true);
-            return;
+        } else {
+            foreach ($apps as $appName => $appConfig) {
+                $statusMessage = array_merge($statusMessage, $this->getAppStatus($appName, $appConfig));
+            }
         }
 
-        foreach ($apps as $appName => $appConfig) {
-            $statusMessage =$this->getAppStatus($appName, $appConfig);
-            $output->write($statusMessage, true);
-        }
+        $output->write($statusMessage, true);
     }
 
     /**
