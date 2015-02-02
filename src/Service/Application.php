@@ -19,7 +19,6 @@
 namespace Reliv\Deploy\Service;
 
 use Psr\Log\LoggerInterface;
-use Reliv\Deploy\Exception\NoPreviousVersionsFoundException;
 use Reliv\Deploy\Vcs\StatusMessageInterface;
 use Symfony\Component\Process\Exception\ProcessFailedException;
 use Zend\Config\Config;
