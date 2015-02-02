@@ -19,8 +19,11 @@
 namespace Reliv\Deploy\Service;
 
 use Psr\Log\LoggerInterface;
+use Reliv\Deploy\Exception\NoPreviousVersionsFoundException;
 use Reliv\Deploy\Vcs\StatusMessageInterface;
+use Symfony\Component\Process\Exception\ProcessFailedException;
 use Zend\Config\Config;
+use Symfony\Component\Process\Process;
 
 /**
  * Application Service Helper
@@ -152,7 +155,8 @@ class Application
 
         $baseDir = $this->getAppBaseDir();
         $releaseToDir = $this->getNewReleaseDir();
-        $symlink = $this->getCurrentReleaseDir();
+        $symlink = $this->getSymLinkPath();
+        $currentReleaseDir = $this->getCurrentReleaseDir();
 
         $this->createDirectory($baseDir);
         $this->createDirectory($releaseToDir);
@@ -167,9 +171,157 @@ class Application
             $repository->update();
         }
 
+        /*
+         * Trigger the Pre Deploy Hook
+         */
+        $preDeployHook = $this->getPreDeployHook();
+
+        if ($preDeployHook) {
+            try {
+                $logger->debug("Running pre deploy hook: ".$preDeployHook);
+                $this->runHook('pre_deploy', $preDeployHook, $releaseToDir);
+            } catch (ProcessFailedException $e) {
+                $logger->error('Failed to run command: '.$preDeployHook);
+                $this->delTree($releaseToDir);
+                $logger->error('Deployment Failed');
+                return;
+            }
+        }
+
         @unlink($symlink);
         symlink($releaseToDir, $symlink);
+
+        /*
+         * Trigger the Pre Deploy Hook
+         */
+        $postDeployHook = $this->getPostDeployHook();
+
+        if ($postDeployHook) {
+            try {
+                $logger->debug("Running post deploy hook: ".$postDeployHook);
+                $this->runHook('post_deploy', $postDeployHook, $releaseToDir);
+            } catch (ProcessFailedException $e) {
+                $logger->error('Failed to run command: '.$postDeployHook);
+
+                if ($currentReleaseDir) {
+                    $logger->error('Deployment Failed.  Preforming a rollback.');
+                    $this->rollback($releaseToDir, $currentReleaseDir);
+                } else {
+                    $logger->error('Deployment Failed.');
+                }
+
+                return;
+            }
+        }
+
+        $logger->debug("Application deployed.  Running post_deploy hook");
+
         $logger->notice('Application "'.$this->appName.'" deployed.');
+    }
+
+    /**
+     * Preform a rollback
+     *
+     * @param string $currentRelease  Current Release Dir (Used by deploy)
+     * @param string $previousRelease Previous Release Dir (Used by deploy)
+     *
+     * @return void
+     */
+    public function rollback($currentRelease = null, $previousRelease = null)
+    {
+        $logger = $this->getLogger();
+        $logger->info('Beginning Rollback for: '.$this->appName);
+
+        $appDir = $this->getAppBaseDir();
+        $symlink = $this->getSymLinkPath();
+
+        if (!is_dir($appDir)) {
+            $logger->error("No deployments found for:" .$this->appName);
+            return;
+        }
+
+        if (!$currentRelease) {
+            $currentRelease = $this->getCurrentReleaseDir();
+        }
+
+        if (!$previousRelease) {
+            $previousRelease = $this->getPreviousReleaseDir();
+        }
+
+        if (!is_dir($previousRelease)) {
+            $logger->error("No previous deployments found for: ".$this->appName);
+            return;
+        }
+
+        /*
+         * Trigger the pre_rollback hook
+         */
+        $preRollbackHook = $this->getPreRollbackHook();
+
+        if ($preRollbackHook) {
+            try {
+                $logger->debug("Running pre deploy hook: ".$preRollbackHook);
+                $this->runHook('pre_rollback', $preRollbackHook, $previousRelease);
+            } catch (ProcessFailedException $e) {
+                $logger->error('Failed to run command: '.$preRollbackHook);
+                $logger->error('Rollback failed.  No changes made to the system.');
+                return;
+            }
+        }
+
+        $logger->debug("Switching symlinks.");
+        @unlink($symlink);
+        symlink($previousRelease, $symlink);
+
+        $logger->debug("Deleting broken version");
+        $this->delTree($currentRelease);
+
+        /*
+         * Trigger the pre_rollback hook
+         */
+        $postRollbackHook = $this->getPostRollbackHook();
+
+        if ($postRollbackHook) {
+            try {
+                $logger->debug("Running post deploy hook: ".$postRollbackHook);
+                $this->runHook('post_rollback', $postRollbackHook, $previousRelease);
+            } catch (ProcessFailedException $e) {
+                $logger->error('Failed to run command: '.$postRollbackHook);
+                $logger->error('Post rollback failed.  System in unclean state.  Manual intervention is required');
+                return;
+            }
+        }
+
+        $logger->notice($this->appName.": Rollback complete.");
+    }
+
+    /**
+     * Run a script hook
+     *
+     * @param string $type       Type of hook
+     * @param string $hook       Command to run
+     * @param string $workingDir Run command from this base directory
+     *
+     * @return void
+     */
+    protected function runHook($type, $hook, $workingDir)
+    {
+        $processLogger = $this->getProcessLogger($this->appName.'.'.$type);
+
+        $process = new Process($hook);
+        $process->setWorkingDirectory($workingDir);
+
+        try {
+            $process->mustRun();
+            $processOutput = $process->getOutput();
+
+            if ($processOutput) {
+                $processLogger->notice($processOutput);
+            }
+        } catch (ProcessFailedException $e) {
+            $processLogger->error($process->getErrorOutput());
+            throw $e;
+        }
     }
 
     /**
@@ -257,7 +409,7 @@ class Application
      */
     protected function getAppBaseDir()
     {
-        $baseDir = $this->appConfig['deploy']['location'];
+        $baseDir = $this->getDeployConfig()->get('location');
         $baseDir = rtrim($baseDir, '/\\');
 
         return $baseDir;
@@ -268,10 +420,39 @@ class Application
      *
      * @return string
      */
+    protected function getSymLinkPath()
+    {
+        $baseDir = $this->getAppBaseDir();
+        $symlink = $this->getSymlinkConfigPath();
+        $currentReleaseDir = $baseDir.DIRECTORY_SEPARATOR.$symlink;
+        $currentReleaseDir = rtrim($currentReleaseDir, "/\\\t\n\r\0\x0B");
+
+        return $currentReleaseDir;
+    }
+
+    /**
+     * Get the actual directory of the current release
+     *
+     * @return null|string
+     */
     protected function getCurrentReleaseDir()
     {
         $baseDir = $this->getAppBaseDir();
-        $currentReleaseDir = $baseDir.DIRECTORY_SEPARATOR.$this->appConfig['deploy']['symlink'];
+        $symLinkPath = $this->getSymlinkPath();
+        $actualRelease = @readlink($symLinkPath);
+
+        if (!$actualRelease) {
+            return null;
+        }
+
+        $temp = explode(DIRECTORY_SEPARATOR, $actualRelease);
+        $currentRelease = array_pop($temp);
+
+        if (!$currentRelease) {
+            return null;
+        }
+
+        $currentReleaseDir = $baseDir.DIRECTORY_SEPARATOR.$currentRelease;
         $currentReleaseDir = rtrim($currentReleaseDir, "/\\\t\n\r\0\x0B");
 
         return $currentReleaseDir;
@@ -289,6 +470,141 @@ class Application
         $releaseDir = rtrim($releaseDir, "/\\\t\n\r\0\x0B");
 
         return $releaseDir;
+    }
+
+    /**
+     * Get the previous release directory
+     *
+     * @return null|string
+     */
+    protected function getPreviousReleaseDir()
+    {
+        $appDir = $this->getAppBaseDir();
+        $symLink = $this->getSymlinkConfigPath();
+        $currentRelease = $this->getCurrentReleaseDir();
+
+
+        if (!is_dir($appDir) || !$currentRelease) {
+            return null;
+        }
+
+        $lastVersion = null;
+
+        $dirListing = @scandir($appDir);
+
+        if ($dirListing && is_array($dirListing)) {
+            natsort($dirListing);
+
+            while (!$lastVersion && count($dirListing) > 0) {
+                $lastVersion = array_pop($dirListing);
+
+                if ($lastVersion == $symLink
+                    || strpos($lastVersion, '.') === 0
+                    || $lastVersion == $currentRelease
+                ) {
+                    $lastVersion = null;
+                }
+            }
+        }
+
+        if (empty($lastVersion)) {
+            return null;
+        }
+
+        $releaseDir = $this->getAppBaseDir().DIRECTORY_SEPARATOR.$lastVersion;
+        $releaseDir = rtrim($releaseDir, "/\\\t\n\r\0\x0B");
+
+        return $releaseDir;
+    }
+
+    /**
+     * Get the Pre Deploy hook for the application
+     *
+     * @return string|null
+     */
+    protected function getPreDeployHook()
+    {
+        return $this->getDeployHooks()->get('pre_deploy', null);
+    }
+
+    /**
+     * Get the Post Deploy hook for the application
+     *
+     * @return string|null
+     */
+    protected function getPostDeployHook()
+    {
+        return $this->getDeployHooks()->get('post_deploy', null);
+    }
+
+    /**
+     * Get the Pre Rollback hook for the application
+     *
+     * @return string|null
+     */
+    protected function getPreRollbackHook()
+    {
+        return $this->getDeployHooks()->get('pre_rollback', null);
+    }
+
+    /**
+     * Get the Post Rollback hook for the application
+     *
+     * @return string|null
+     */
+    protected function getPostRollbackHook()
+    {
+        return $this->getDeployHooks()->get('post_rollback', null);
+    }
+
+    /**
+     * Get all the deploy hooks for the application
+     *
+     * @return Config
+     */
+    protected function getDeployHooks()
+    {
+        return $this->getDeployConfig()->get('hooks', new Config(array()));
+    }
+
+    /**
+     * Get the config for deployment
+     *
+     * @return Config
+     */
+    protected function getDeployConfig()
+    {
+        return $this->getApplicationConfig()->get('deploy', new Config(array()));
+    }
+
+    /**
+     * Get the repository configs
+     *
+     * @return Config
+     */
+    protected function getRepositoryConfig()
+    {
+        return $this->getApplicationConfig()->get('repositories', new Config(array()));
+    }
+
+    /**
+     * Get the configured symlink path
+     *
+     * @return string
+     */
+    protected function getSymlinkConfigPath()
+    {
+        return $this->getDeployConfig()->get('symlink');
+    }
+
+    /**
+     * Get the Applications config
+     *
+     * @return Config
+     */
+    protected function getApplicationConfig()
+    {
+        return $this->appConfig;
     }
 
     /**
@@ -312,6 +628,27 @@ class Application
         } else {
             $logger->debug('Directory already exists: '.$dir);
         }
+    }
+
+    /**
+     * Recursive remove directory.  Equivalent to `rm -Rf`
+     *
+     * @param string $dir Directory to remove
+     *
+     * @return bool
+     */
+    protected function delTree($dir)
+    {
+        if (!is_dir($dir) && !is_file($dir)) {
+            return true;
+        }
+
+        $files = array_diff(scandir($dir), array('.','..'));
+        foreach ($files as $file) {
+            (is_dir("$dir/$file")) ? $this->delTree("$dir/$file") : unlink("$dir/$file");
+        }
+
+        return rmdir($dir);
     }
 
     /**
@@ -343,7 +680,9 @@ class Application
             return $this->repositories;
         }
 
-        foreach ($this->appConfig['repositories'] as $repoName => $repoConfig) {
+        $repositories = $this->getRepositoryConfig();
+
+        foreach ($repositories as $repoName => $repoConfig) {
             $repoClass = $this->vcsMapper($repoConfig['type']);
 
             if (!class_exists($repoClass) || !in_array('Reliv\Deploy\Vcs\VcsInterface', class_implements($repoClass))) {
@@ -394,9 +733,31 @@ class Application
     protected function getLogger()
     {
         if (!$this->logger) {
-            $this->logger = $this->loggerService->getLogger($this->appName);
+            $this->logger = $this->getLoggerService()->getLogger($this->appName);
         }
 
         return $this->logger;
+    }
+
+    /**
+     * Get a logger for the running process
+     *
+     * @param string $type Type of process
+     *
+     * @return \Monolog\Logger
+     */
+    protected function getProcessLogger($type)
+    {
+        return $this->getLoggerService()->getLogger($type);
+    }
+
+    /**
+     * Get the logger service
+     *
+     * @return LoggerService
+     */
+    protected function getLoggerService()
+    {
+        return $this->loggerService;
     }
 }

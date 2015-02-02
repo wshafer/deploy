@@ -102,7 +102,7 @@ interface VcsInterface
     /**
      * Preform the update.
      *
-     * @return void
+     * @return string Revision number updated to
      */
     public function update();
 }
