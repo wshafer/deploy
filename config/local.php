@@ -1,6 +1,19 @@
 <?php
 return array(
-//    'applications' => array(
+    'applications' => array(
+        'Test' => array(
+            'name' => 'Test',
+            'repositories' => array (
+                'main' => array(
+                    'type' => 'git',
+                    'origin' => '/tmp/test',
+                    'directory' => '/'
+                )
+            ),
+            'deploy' => array(
+                'location' => '/tmp/testDeploy',
+            ),
+        ),
 //        'RWriter' => array(
 //            'name' => 'R-Writer',
 //            'repositories' => array(
@@ -38,5 +51,5 @@ return array(
 //                'location' => '/tmp/rwriter'
 //            )
 //        )
-//    )
+    )
 );

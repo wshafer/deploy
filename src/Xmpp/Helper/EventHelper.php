@@ -6,7 +6,7 @@ use Monolog\Formatter\LineFormatter;
 use Reliv\Deploy\Xmpp\Event\XmppEventInterface;
 use Reliv\Deploy\Xmpp\Monolog\Handler\XmppHandler;
 use Reliv\Deploy\Xmpp\Symfony\Output\XmppOutput;
-use Symfony\Component\Console\Input\ArrayInput;
+use Symfony\Component\Console\Input\ArgvInput;
 use Zend\Config\Config;
 
 class EventHelper
@@ -70,7 +70,7 @@ class EventHelper
             \JAXLLoop::$clock->call_fun_periodic(
                 $job['delay'],
                 function () use ($helper, $job) {
-                    $helper->runCommand($job['command']);
+                    $helper->runCommand($this->getRecipients(), $job['command']);
                 }
             );
         }
@@ -211,8 +211,8 @@ class EventHelper
      */
     public function runCommand($outputTo, $command, Array $args = array())
     {
-        $args = array('command' => $command) + $args;
-        $input = new ArrayInput($args);
+        $args = array_merge(array('deploy', $command), $args, array('-f'));
+        $input = new ArgvInput($args);
 
         $output = new XmppOutput($this->getClient(), $outputTo);
         $this->event->getCommand()->runAdditionalCommand($input, $output);

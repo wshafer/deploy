@@ -44,7 +44,7 @@ return array(
             'auth_type' => 'DIGEST-MD5',
             'priv_dir' => sys_get_temp_dir(),
             'strict' => false,
-//            'log_level' => 'JAXL_ERROR',
+            'log_level' => 'JAXL_ERROR',
         ),
 
         'start' => array(
@@ -66,10 +66,10 @@ return array(
         ),
 
         'cron' => array(
-//            'deploy' => array(
-//                'command' => 'deploy',
-//                'delay'   => '120000000'
-//            ),
+            'deploy' => array(
+                'command' => 'deploy',
+                'delay'   => '120000000'
+            ),
         ),
     ),
 

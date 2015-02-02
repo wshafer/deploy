@@ -20,6 +20,7 @@
 namespace Reliv\Deploy\Command;
 
 use Reliv\Deploy\Service\Application;
+use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Zend\Config\Config;
@@ -47,7 +48,12 @@ class Deploy extends CommandAbstract
     protected function configure()
     {
         $this->setName('deploy')
-            ->setDescription('Deploy an app');
+            ->setDescription('Deploy an app')
+            ->addArgument(
+                'application',
+                InputArgument::OPTIONAL,
+                'Application to deploy'
+            );
     }
 
     /**
@@ -68,12 +74,42 @@ class Deploy extends CommandAbstract
 
         $logger->debug('Apps Config: '.print_r($apps->toArray(), true));
 
-        foreach ($apps as $appName => $appConfig) {
-            $logger->debug('Calling the Application service for '.$appName);
-            $application = $this->getApplicationHelper($appName, $appConfig);
-            $application->deploy();
-            $logger->debug('Control returned from application service of '.$appName);
+        $appToDeploy = $name = $input->getArgument('application');
+
+        if (strtolower($appToDeploy) == 'all') {
+            $appToDeploy = null;
         }
+
+        if ($appToDeploy) {
+            if (empty($apps[$appToDeploy])) {
+                $logger->error($appToDeploy.' not found');
+                return;
+            }
+
+            $this->runAppDeploy($appToDeploy, $apps[$appToDeploy]);
+            return;
+        }
+
+        foreach ($apps as $appName => $appConfig) {
+            $this->runAppDeploy($appName, $appConfig);
+        }
+    }
+
+    /**
+     * Run the application helper deploy script for a single application
+     *
+     * @param string $appName   Application name or key
+     * @param Config $appConfig Application config
+     *
+     * @return void
+     */
+    protected function runAppDeploy($appName, Config $appConfig)
+    {
+        $logger = $this->getCommandLogger();
+        $logger->debug('Calling the Application service for '.$appName);
+        $application = $this->getApplicationHelper($appName, $appConfig);
+        $application->deploy();
+        $logger->debug('Control returned from application service of '.$appName);
     }
 
     /**

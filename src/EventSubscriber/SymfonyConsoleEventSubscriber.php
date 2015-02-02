@@ -5,6 +5,7 @@ namespace Reliv\Deploy\EventSubscriber;
 use Symfony\Component\Console\Event\ConsoleCommandEvent;
 use Symfony\Component\Console\Event\ConsoleTerminateEvent;
 use Symfony\Component\Console\Input\ArgvInput;
+use Symfony\Component\Console\Input\InputOption;
 use Zend\Config\Config;
 
 class SymfonyConsoleEventSubscriber extends EventSubscriberAbstract
@@ -20,8 +21,24 @@ class SymfonyConsoleEventSubscriber extends EventSubscriberAbstract
     public function onConsoleCommand(ConsoleCommandEvent $event)
     {
         $commandName = $event->getCommand()->getName();
+        $inputDefinition = $event->getCommand()->getApplication()->getDefinition();
+        $inputDefinition->addOption(
+            new InputOption(
+                'force',
+                'f',
+                InputOption::VALUE_NONE,
+                'Skip the lock check and run anyway.  Might cause issues during a deployment'
+            )
+        );
 
-        if ($commandName == 'status' || !$event->getInput() instanceof ArgvInput) {
+        $event->getCommand()->mergeApplicationDefinition();
+
+        $input = $event->getInput();
+        $input->bind($event->getCommand()->getDefinition());
+
+        $force = $input->getOption('force');
+
+        if ($commandName == 'status' || $force) {
             return;
         }
 
