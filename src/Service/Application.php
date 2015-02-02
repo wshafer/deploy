@@ -19,8 +19,7 @@
 namespace Reliv\Deploy\Service;
 
 use Psr\Log\LoggerInterface;
-use Reliv\Deploy\Service\LoggerService;
-use Reliv\Deploy\Vcs\Status;
+use Reliv\Deploy\Vcs\StatusMessageInterface;
 use Zend\Config\Config;
 
 /**
@@ -114,7 +113,7 @@ class Application
         foreach ($repositories as $repoName => $repository) {
             $status = $repository->getStatus();
 
-            if (!$status instanceof Status) {
+            if (!$status instanceof StatusMessageInterface) {
                 throw new \RuntimeException(
                     'Status returned from '.$repoName.' is not valid.'
                 );

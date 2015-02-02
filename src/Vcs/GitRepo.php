@@ -146,7 +146,7 @@ class GitRepo implements VcsInterface
      */
     public function getStatus()
     {
-        return new Status(
+        return new StatusMessage(
             $this->getLatestRepoVersionNumber(),
             $this->getDeployedVersionNumber(),
             $this->getDeployedDate(),
