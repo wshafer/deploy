@@ -1,0 +1,10 @@
+description "Reliv Deploy Daemon"
+author "Westin Shafer @ Reliv International"
+
+start on startup
+stop on shutdown
+respawn
+
+script
+ sudo -u root php -f /path/to/deploy/deploy auto
+end script
