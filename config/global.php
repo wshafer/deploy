@@ -70,7 +70,8 @@ return array(
         'cron' => array(
             'deploy' => array(
                 'command' => 'deploy',
-                'delay'   => '120000000'
+                //'delay'   => '120000000'
+                'delay'   => '1200'
             ),
         ),
     ),

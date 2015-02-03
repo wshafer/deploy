@@ -215,7 +215,6 @@ class EventHelper
         $input = new ArgvInput($args);
 
         $output = new XmppOutput($this->getClient(), $outputTo);
-        $output->write("Starting command: ".$command);
         $this->event->getCommand()->runAdditionalCommand($input, $output);
     }
 }
