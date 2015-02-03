@@ -38,10 +38,6 @@ return array(
 
     'xmpp' => array(
         'connection' => array(
-            'jid' => 'bot@im.reliv.com',
-            'pass' => 'the1end',
-            'force_tls' => true,
-            'auth_type' => 'DIGEST-MD5',
             'priv_dir' => sys_get_temp_dir(),
             'strict' => false,
             'log_level' => 'JAXL_ERROR',
@@ -54,14 +50,7 @@ return array(
 
         'notifications' => array(
             'defaultReportingLevel' => 'notice',
-            'recipients' => array(
-                array(
-                    'jid' => 'wshafer@im.reliv.com',
-                ),
-                array(
-                    'jid' => 'rmcnew@im.reliv.com',
-                ),
-            )
+            'recipients' => array(),
         ),
         'logger' => array(
             'logFormat' => gethostname()." - %level_name%: %message% %context% %extra%\n",
@@ -70,8 +59,7 @@ return array(
         'cron' => array(
             'deploy' => array(
                 'command' => 'deploy',
-                //'delay'   => '120000000'
-                'delay'   => '1200'
+                'delay'   => '120000000', // In Micro seconds
             ),
         ),
     ),
