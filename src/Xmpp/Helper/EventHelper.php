@@ -58,22 +58,7 @@ class EventHelper
 
     public function startCron()
     {
-        $cronJobs = $this->getCronConfig();
-
-        foreach ($cronJobs as $job) {
-            if (empty($job['command']) || empty($job['delay'])) {
-                continue;
-            }
-
-            $helper = $this;
-
-            \JAXLLoop::$clock->call_fun_periodic(
-                $job['delay'],
-                function () use ($helper, $job) {
-                    $helper->runCommand($this->getRecipients(), $job['command']);
-                }
-            );
-        }
+        $this->event->getCronHelper()->startCron();
     }
 
     public function processChatMessage($from, $message) {
@@ -95,7 +80,14 @@ class EventHelper
             return;
         }
 
-        $this->runCommand($from, $command, $args);
+        switch ($command) {
+            case 'cron':
+                $this->event->getCronHelper()->cronCommand($args[0], $from);
+                break;
+            default:
+                $this->event->getCronHelper()->runCommand($from, $command, $args);
+                break;
+        }
     }
 
     protected function filterMessage($message)
@@ -159,17 +151,6 @@ class EventHelper
     }
 
     /**
-     * Get the cron config
-     *
-     * @return \Zend\Config\Config
-     */
-    public function getCronConfig()
-    {
-        $xmppConfig = $this->getXmppConfig();
-        return $xmppConfig->get('cron', new Config(array()));
-    }
-
-    /**
      * Get Recipients List
      *
      * @return \Zend\Config\Config
@@ -200,21 +181,5 @@ class EventHelper
         return $this->event->getClient();
     }
 
-    /**
-     * Run another command using Xmpp as the output layer
-     *
-     * @param string $outputTo Send output to
-     * @param string $command  Command to run
-     * @param array  $args     Arguments to pass to command
-     *
-     * @return void
-     */
-    public function runCommand($outputTo, $command, Array $args = array())
-    {
-        $args = array_merge(array('deploy', $command), $args);
-        $input = new ArgvInput($args);
 
-        $output = new XmppOutput($this->getClient(), $outputTo);
-        $this->event->getCommand()->runAdditionalCommand($input, $output);
-    }
 }

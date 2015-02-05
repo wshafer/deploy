@@ -33,4 +33,11 @@ interface XmppEventInterface
      * @return \Reliv\Deploy\Service\LoggerService
      */
     public function getLoggerService();
+
+    /**
+     * Get the Cron Helper
+     *
+     * @return \Reliv\Deploy\Xmpp\Helper\CronHelper
+     */
+    public function getCronHelper();
 }

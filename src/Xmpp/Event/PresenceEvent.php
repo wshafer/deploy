@@ -3,6 +3,7 @@
 namespace Reliv\Deploy\Xmpp\Event;
 
 use Reliv\Deploy\Command\CommandInterface;
+use Reliv\Deploy\Xmpp\Helper\CronHelper;
 
 class PresenceEvent extends XmppEventAbstract
 {
@@ -14,16 +15,18 @@ class PresenceEvent extends XmppEventAbstract
     /**
      * Event Constructor
      *
-     * @param \JAXL            $client  Jaxl Client
-     * @param CommandInterface $command Running Command
-     * @param \XMPPStanza      $stanza  Original Jaxl Stanza
-     * @param string           $jid     Jabber Id
-     * @param string           $type    Presence Type
-     * @param string|null      $show    Optional Show message
+     * @param \JAXL            $client     Jaxl Client
+     * @param CommandInterface $command    Running Command
+     * @param CronHelper       $cronHelper Cron Helper
+     * @param \XMPPStanza      $stanza     Original Jaxl Stanza
+     * @param string           $jid        Jabber Id
+     * @param string           $type       Presence Type
+     * @param string|null      $show       Optional Show message
      */
     public function __construct(
         \JAXL $client,
         CommandInterface $command,
+        CronHelper $cronHelper,
         \XMPPStanza $stanza,
         $jid,
         $type = 'available',
@@ -35,7 +38,7 @@ class PresenceEvent extends XmppEventAbstract
         $this->setType($type);
         $this->setShow($show);
 
-        parent::__construct($client, $command);
+        parent::__construct($client, $command, $cronHelper);
     }
 
     /**

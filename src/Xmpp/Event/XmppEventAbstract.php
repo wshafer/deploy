@@ -5,6 +5,7 @@ namespace Reliv\Deploy\Xmpp\Event;
 use Reliv\Deploy\Command\CommandInterface;
 use Reliv\Deploy\Service\LoggerService;
 use Reliv\Deploy\Service\ConfigService;
+use Reliv\Deploy\Xmpp\Helper\CronHelper;
 use Symfony\Component\EventDispatcher\Event;
 
 abstract class XmppEventAbstract extends Event implements XmppEventInterface
@@ -15,6 +16,11 @@ abstract class XmppEventAbstract extends Event implements XmppEventInterface
     protected $client;
 
     /**
+     * @var CronHelper
+     */
+    protected $cronHelper;
+
+    /**
      * @var CommandInterface
      */
     protected $command;
@@ -22,13 +28,15 @@ abstract class XmppEventAbstract extends Event implements XmppEventInterface
     /**
      * Event Constructor
      *
-     * @param \JAXL            $client  Jaxl Client
-     * @param CommandInterface $command Symfony Console Command object
+     * @param \JAXL            $client     Jaxl Client
+     * @param CommandInterface $command    Symfony Console Command object
+     * @param CronHelper       $cronHelper Cron Helper
      */
-    public function __construct(\JAXL $client, CommandInterface $command)
+    public function __construct(\JAXL $client, CommandInterface $command, CronHelper $cronHelper)
     {
         $this->client        = $client;
         $this->command       = $command;
+        $this->cronHelper    = $cronHelper;
     }
 
     /**
@@ -69,5 +77,15 @@ abstract class XmppEventAbstract extends Event implements XmppEventInterface
     public function getLoggerService()
     {
         return $this->getCommand()->getLoggerService();
+    }
+
+    /**
+     * Get the current Cron helper
+     *
+     * @return CronHelper
+     */
+    public function getCronHelper()
+    {
+        return $this->cronHelper;
     }
 }

@@ -8,6 +8,7 @@ use Reliv\Deploy\Xmpp\Event\PresenceEvent;
 use Reliv\Deploy\Xmpp\Event\XmppEvents;
 use Reliv\Deploy\Xmpp\Event\AuthEvent;
 use Reliv\Deploy\Xmpp\Event\ConnectEvent;
+use Reliv\Deploy\Xmpp\Helper\CronHelper;
 use Zend\Config\Config;
 
 class XmppDaemon extends DaemonAbstract
@@ -21,6 +22,9 @@ class XmppDaemon extends DaemonAbstract
      * @var Config
      */
     protected $config;
+
+    protected $cronHelper;
+
 
     /**
      * Start Daemon
@@ -119,6 +123,7 @@ class XmppDaemon extends DaemonAbstract
         $event = new ConnectEvent(
             $this->getClient(),
             $this->getCommand(),
+            $this->getCronHelper(),
             true
         );
 
@@ -145,6 +150,7 @@ class XmppDaemon extends DaemonAbstract
         $event = new ConnectEvent(
             $this->getClient(),
             $this->getCommand(),
+            $this->getCronHelper(),
             false,
             $errorNumber,
             $errorMessage
@@ -166,6 +172,7 @@ class XmppDaemon extends DaemonAbstract
         $event = new AuthEvent(
             $this->getClient(),
             $this->getCommand(),
+            $this->getCronHelper(),
             true
         );
 
@@ -187,6 +194,7 @@ class XmppDaemon extends DaemonAbstract
         $event = new AuthEvent(
             $this->getClient(),
             $this->getCommand(),
+            $this->getCronHelper(),
             false,
             $reason
         );
@@ -209,6 +217,7 @@ class XmppDaemon extends DaemonAbstract
         $event = new PresenceEvent(
             $this->getClient(),
             $this->getCommand(),
+            $this->getCronHelper(),
             $stanza,
             $stanza->from,
             $stanza->type,
@@ -241,6 +250,7 @@ class XmppDaemon extends DaemonAbstract
         $event = new ChatEvent(
             $this->getClient(),
             $this->getCommand(),
+            $this->getCronHelper(),
             $stanza,
             'chat',
             $stanza->from,
@@ -276,5 +286,19 @@ class XmppDaemon extends DaemonAbstract
         }
 
         return $this->config;
+    }
+
+    /**
+     * Get the cron helper for XMPP
+     *
+     * @return CronHelper
+     */
+    public function getCronHelper()
+    {
+        if (!$this->cronHelper) {
+            $this->cronHelper = new CronHelper($this->getConfig(), $this->getClient(), $this->getCommand());
+        }
+
+        return $this->cronHelper;
     }
 }

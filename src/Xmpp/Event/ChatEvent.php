@@ -3,6 +3,7 @@
 namespace Reliv\Deploy\Xmpp\Event;
 
 use Reliv\Deploy\Command\CommandInterface;
+use Reliv\Deploy\Xmpp\Helper\CronHelper;
 
 class ChatEvent extends XmppEventAbstract
 {
@@ -15,16 +16,18 @@ class ChatEvent extends XmppEventAbstract
     /**
      * Event Constructor
      *
-     * @param \JAXL            $client  Jaxl Client
-     * @param CommandInterface $command Running Command
-     * @param \XMPPStanza      $stanza  Original Jaxl Stanza
-     * @param string           $type    Type of chat message.
-     * @param string           $from    From Jabber Id
-     * @param string           $message Message
+     * @param \JAXL            $client     Jaxl Client
+     * @param CommandInterface $command    Running Command
+     * @param CronHelper       $cronHelper Cron Helper
+     * @param \XMPPStanza      $stanza     Original Jaxl Stanza
+     * @param string           $type       Type of chat message.
+     * @param string           $from       From Jabber Id
+     * @param string           $message    Message
      */
     public function __construct(
         \JAXL $client,
         CommandInterface $command,
+        CronHelper $cronHelper,
         \XMPPStanza $stanza,
         $type,
         $from,
@@ -35,7 +38,7 @@ class ChatEvent extends XmppEventAbstract
         $this->from = $from;
         $this->message = trim($message);
 
-        parent::__construct($client, $command);
+        parent::__construct($client, $command, $cronHelper);
     }
 
     protected function setType($type)

@@ -3,6 +3,7 @@
 namespace Reliv\Deploy\Xmpp\Event;
 
 use Reliv\Deploy\Command\CommandInterface;
+use Reliv\Deploy\Xmpp\Helper\CronHelper;
 
 class ConnectEvent extends XmppEventAbstract
 {
@@ -13,15 +14,17 @@ class ConnectEvent extends XmppEventAbstract
     /**
      * Event Constructor
      *
-     * @param \JAXL   $client       Jaxl Client
-     * @param CommandInterface    $command      Running Command
-     * @param boolean $connected    Was the connection successful
-     * @param integer $errorNumber  Connection Error Number
-     * @param string  $errorMessage Connection Error Message
+     * @param \JAXL            $client       Jaxl Client
+     * @param CommandInterface $command      Running Command
+     * @param CronHelper       $cronHelper   Cron Helper
+     * @param boolean          $connected    Was the connection successful
+     * @param integer          $errorNumber  Connection Error Number
+     * @param string           $errorMessage Connection Error Message
      */
     public function __construct(
         \JAXL $client,
         CommandInterface  $command,
+        CronHelper $cronHelper,
         $connected,
         $errorNumber = null,
         $errorMessage = ''
@@ -30,7 +33,7 @@ class ConnectEvent extends XmppEventAbstract
         $this->errorNumber = $errorNumber;
         $this->errorMessage = $errorMessage;
 
-        parent::__construct($client, $command);
+        parent::__construct($client, $command, $cronHelper);
     }
 
     /**
