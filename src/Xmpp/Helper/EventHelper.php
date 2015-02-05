@@ -76,7 +76,6 @@ class EventHelper
         $pattern = '/^'.$hostname.'.+/i';
 
         if (!preg_match($pattern, $myHostname) && $hostname != 'all') {
-            $this->getClient()->send_chat_msg($from, "Hostname did NOT match");
             return;
         }
 
