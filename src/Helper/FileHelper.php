@@ -46,7 +46,13 @@ class FileHelper
 
         $files = array_diff(scandir($dir), array('.','..'));
         foreach ($files as $file) {
-            (is_dir("$dir/$file")) ? $this->delTree("$dir/$file") : unlink("$dir/$file");
+            $path = $dir.DIRECTORY_SEPARATOR.$file;
+
+            if (is_link($path) || is_file($path)) {
+                unlink($path);
+            } else {
+                $this->delTree($path);
+            }
         }
 
         return rmdir($dir);
