@@ -19,6 +19,7 @@
 
 namespace Reliv\Deploy\Command;
 
+use Reliv\Deploy\Factory\ApplicationServiceFactory;
 use Reliv\Deploy\Helper\ApplicationServiceConfigHelper;
 use Reliv\Deploy\Helper\ApplicationServiceVcsHelper;
 use Reliv\Deploy\Helper\FileHelper;
@@ -125,18 +126,6 @@ class Rollback extends CommandAbstract
      */
     protected function getApplicationHelper($name, Config $config)
     {
-        $appConfigHelper = new ApplicationServiceConfigHelper($config);
-        $fileHelper = new FileHelper();
-        $vcsHelper = new ApplicationServiceVcsHelper($appConfigHelper, $this->getLoggerService());
-
-        $application = new Application(
-            $name,
-            $appConfigHelper,
-            $this->getLoggerService(),
-            $fileHelper,
-            $vcsHelper
-        );
-
-        return $application;
+        return ApplicationServiceFactory::getApplicationService($name, $config, $this->getLoggerService());
     }
 }

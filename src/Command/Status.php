@@ -19,6 +19,7 @@
 
 namespace Reliv\Deploy\Command;
 
+use Reliv\Deploy\Factory\ApplicationServiceFactory;
 use Reliv\Deploy\Service\Application;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
@@ -132,12 +133,6 @@ class Status extends CommandAbstract
      */
     protected function getApplicationHelper($name, Config $config)
     {
-        $application = new Application(
-            $name,
-            $config,
-            $this->getLoggerService()
-        );
-
-        return $application;
+        return ApplicationServiceFactory::getApplicationService($name, $config, $this->getLoggerService());
     }
 }
