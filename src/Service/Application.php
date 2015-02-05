@@ -19,9 +19,11 @@
 namespace Reliv\Deploy\Service;
 
 use Psr\Log\LoggerInterface;
+use Reliv\Deploy\Helper\ApplicationServiceConfigHelper;
+use Reliv\Deploy\Helper\ApplicationServiceVcsHelper;
+use Reliv\Deploy\Helper\FileHelper;
 use Reliv\Deploy\Vcs\StatusMessageInterface;
 use Symfony\Component\Process\Exception\ProcessFailedException;
-use Zend\Config\Config;
 use Symfony\Component\Process\Process;
 
 /**
@@ -42,11 +44,17 @@ class Application
     /** @var string Application Name */
     protected $appName;
 
-    /** @var \Zend\Config\Config Application Config */
-    protected $appConfig;
-
     /** @var LoggerService Logger */
     protected $loggerService;
+
+    /** @var ApplicationServiceConfigHelper  */
+    protected $appConfig;
+
+    /** @var FileHelper  */
+    protected $fileHelper;
+
+    /** @var ApplicationServiceVcsHelper */
+    protected $vcsHelper;
 
     /*
      * Place Holders
@@ -54,9 +62,6 @@ class Application
 
     /** @var array Place Holder for repository objects */
     protected $repositories = array();
-
-    /** @var string Place holder for Next Release  */
-    protected $nextRelease;
 
     /** @var array Place Holder for Deployed Versions */
     protected $deployedVersions = array();
@@ -66,14 +71,18 @@ class Application
     /**
      * Constructor
      *
-     * @param string        $appName       Name of the application
-     * @param Config        $appConfig     Config for the Application deployment
-     * @param LoggerService $loggerService Reliv Deploy Logger Factory
+     * @param string                         $appName       Name of the application
+     * @param ApplicationServiceConfigHelper $appConfig     Config for the Application deployment
+     * @param LoggerService                  $loggerService Reliv Deploy Logger Factory
+     * @param FileHelper                     $fileHelper    File System Helper
+     * @param ApplicationServiceVcsHelper    $vcsHelper     Application VCS Helper
      */
     public function __construct(
         $appName,
-        Config $appConfig,
-        LoggerService $loggerService
+        ApplicationServiceConfigHelper $appConfig,
+        LoggerService $loggerService,
+        FileHelper $fileHelper,
+        ApplicationServiceVcsHelper $vcsHelper
     ) {
         if (empty($appName)) {
             throw new \RuntimeException(
@@ -83,8 +92,9 @@ class Application
 
         $this->appName = $appName;
         $this->loggerService = $loggerService;
+        $this->fileHelper = $fileHelper;
+        $this->vcsHelper = $vcsHelper;
         $this->appConfig = $appConfig;
-        $this->nextRelease = $this->getNewRevision();
     }
 
     /**
@@ -96,14 +106,14 @@ class Application
     {
         $message = array();
 
-        $currentReleaseDir = $this->getCurrentReleaseDir();
+        $currentReleaseDir = $this->appConfig->getCurrentReleaseDir();
 
         if (!is_dir($currentReleaseDir)) {
             $message[] = $this->appName. ' is not currently deployed.';
             return $message;
         }
 
-        $repositories = $this->getRepoHelpers();
+        $repositories = $this->vcsHelper->getRepoHelpers();
 
         $message[] = 'Status of '.$this->appName.':';
         $message[] = '';
@@ -150,17 +160,15 @@ class Application
 
         $logger->notice('Application "'.$this->appName.'" is out of date.  Updating');
 
-        $this->nextRelease = $this->getNewRevision();
+        $baseDir = $this->appConfig->getAppBaseDir();
+        $releaseToDir = $this->appConfig->getNewReleaseDir();
+        $symlink = $this->appConfig->getSymLinkPath();
+        $currentReleaseDir = $this->appConfig->getCurrentReleaseDir();
 
-        $baseDir = $this->getAppBaseDir();
-        $releaseToDir = $this->getNewReleaseDir();
-        $symlink = $this->getSymLinkPath();
-        $currentReleaseDir = $this->getCurrentReleaseDir();
+        $this->fileHelper->createDirectory($baseDir);
+        $this->fileHelper->createDirectory($releaseToDir);
 
-        $this->createDirectory($baseDir);
-        $this->createDirectory($releaseToDir);
-
-        $repositories = $this->getRepoHelpers();
+        $repositories = $this->vcsHelper->getRepoHelpers();
 
         /**
          * @var string                         $repoKey    Name of repo
@@ -173,7 +181,7 @@ class Application
         /*
          * Trigger the Pre Deploy Hook
          */
-        $preDeployHook = $this->getPreDeployHook();
+        $preDeployHook = $this->appConfig->getPreDeployHook();
 
         if ($preDeployHook) {
             try {
@@ -181,7 +189,7 @@ class Application
                 $this->runHook('pre_deploy', $preDeployHook, $releaseToDir);
             } catch (ProcessFailedException $e) {
                 $logger->error('Failed to run command: '.$preDeployHook);
-                $this->delTree($releaseToDir);
+                $this->fileHelper->delTree($releaseToDir);
                 $logger->error('Deployment Failed');
                 return;
             }
@@ -190,10 +198,12 @@ class Application
         @unlink($symlink);
         symlink($releaseToDir, $symlink);
 
+        $logger->debug("Application deployed.  Running post_deploy hook");
+
         /*
          * Trigger the Pre Deploy Hook
          */
-        $postDeployHook = $this->getPostDeployHook();
+        $postDeployHook = $this->appConfig->getPostDeployHook();
 
         if ($postDeployHook) {
             try {
@@ -213,7 +223,8 @@ class Application
             }
         }
 
-        $logger->debug("Application deployed.  Running post_deploy hook");
+        $logger->debug("Cleaning application directory");
+        $this->fileHelper->cleanAppDir($baseDir, $releaseToDir, $this->appConfig->getNumberOfRevisionsToKeep());
 
         $logger->notice('Application "'.$this->appName.'" deployed.');
     }
@@ -231,8 +242,8 @@ class Application
         $logger = $this->getLogger();
         $logger->info('Beginning Rollback for: '.$this->appName);
 
-        $appDir = $this->getAppBaseDir();
-        $symlink = $this->getSymLinkPath();
+        $appDir = $this->appConfig->getAppBaseDir();
+        $symlink = $this->appConfig->getSymLinkPath();
 
         if (!is_dir($appDir)) {
             $logger->error("No deployments found for:" .$this->appName);
@@ -240,7 +251,7 @@ class Application
         }
 
         if (!$currentRelease) {
-            $currentRelease = $this->getCurrentReleaseDir();
+            $currentRelease = $this->appConfig->getCurrentReleaseDir();
         }
 
         if (!$previousRelease) {
@@ -255,7 +266,7 @@ class Application
         /*
          * Trigger the pre_rollback hook
          */
-        $preRollbackHook = $this->getPreRollbackHook();
+        $preRollbackHook = $this->appConfig->getPreRollbackHook();
 
         if ($preRollbackHook) {
             try {
@@ -273,12 +284,12 @@ class Application
         symlink($previousRelease, $symlink);
 
         $logger->debug("Deleting broken version");
-        $this->delTree($currentRelease);
+        $this->fileHelper->delTree($currentRelease);
 
         /*
          * Trigger the pre_rollback hook
          */
-        $postRollbackHook = $this->getPostRollbackHook();
+        $postRollbackHook = $this->appConfig->getPostRollbackHook();
 
         if ($postRollbackHook) {
             try {
@@ -290,6 +301,9 @@ class Application
                 return;
             }
         }
+
+        $logger->debug("Cleaning application directory");
+        $this->fileHelper->cleanAppDir($appDir, $previousRelease, $this->appConfig->getNumberOfRevisionsToKeep());
 
         $logger->notice($this->appName.": Rollback complete.");
     }
@@ -334,8 +348,8 @@ class Application
 
         $logger->debug('Checking to see if app needs updates');
 
-        $baseDir = $this->getAppBaseDir();
-        $currentReleaseDir = $this->getCurrentReleaseDir();
+        $baseDir = $this->appConfig->getAppBaseDir();
+        $currentReleaseDir = $this->appConfig->getCurrentReleaseDir();
 
         $logger->debug('Checking to see if app directory exists for '.$this->appName.' at: '.$baseDir);
         if (!is_dir($baseDir)) {
@@ -354,7 +368,7 @@ class Application
 
         $logger->debug('Symlink does exist.  Checking Repositories for updates.');
 
-        $repositories = $this->getRepoHelpers();
+        $repositories = $this->vcsHelper->getRepoHelpers();
 
         /**
          * @var string                         $repoKey    Name of repo
@@ -381,348 +395,6 @@ class Application
         return false;
     }
 
-    /**
-     * Get the next revision number
-     *
-     * @return bool|string
-     */
-    protected function getNewRevision()
-    {
-        if (!empty($this->nextRelease)) {
-            return $this->nextRelease;
-
-        }
-        $microTimestamp = microtime(true);
-        $timestamp = floor($microTimestamp);
-        $milliseconds = round(($microTimestamp - $timestamp) * 1000000);
-
-        $this->nextRelease = date(preg_replace('`(?<!\\\\)u`', $milliseconds, 'Y.m.d.H.i.s.u'), $timestamp);
-
-        return $this->nextRelease;
-    }
-
-    /**
-     * Get the Application Base Directory
-     *
-     * @return string
-     */
-    protected function getAppBaseDir()
-    {
-        $baseDir = $this->getDeployConfig()->get('location');
-        $baseDir = rtrim($baseDir, '/\\');
-
-        return $baseDir;
-    }
-
-    /**
-     * Get the Current Release Directory
-     *
-     * @return string
-     */
-    protected function getSymLinkPath()
-    {
-        $baseDir = $this->getAppBaseDir();
-        $symlink = $this->getSymlinkConfigPath();
-        $currentReleaseDir = $baseDir.DIRECTORY_SEPARATOR.$symlink;
-        $currentReleaseDir = rtrim($currentReleaseDir, "/\\\t\n\r\0\x0B");
-
-        return $currentReleaseDir;
-    }
-
-    /**
-     * Get the actual directory of the current release
-     *
-     * @return null|string
-     */
-    protected function getCurrentReleaseDir()
-    {
-        $baseDir = $this->getAppBaseDir();
-        $symLinkPath = $this->getSymlinkPath();
-        $actualRelease = @readlink($symLinkPath);
-
-        if (!$actualRelease) {
-            return null;
-        }
-
-        $temp = explode(DIRECTORY_SEPARATOR, $actualRelease);
-        $currentRelease = array_pop($temp);
-
-        if (!$currentRelease) {
-            return null;
-        }
-
-        $currentReleaseDir = $baseDir.DIRECTORY_SEPARATOR.$currentRelease;
-        $currentReleaseDir = rtrim($currentReleaseDir, "/\\\t\n\r\0\x0B");
-
-        return $currentReleaseDir;
-    }
-
-    /**
-     * Get the new or next Release Directory
-     *
-     * @return string
-     */
-    protected function getNewReleaseDir()
-    {
-        $baseDir = $this->getAppBaseDir();
-        $releaseDir = $baseDir.DIRECTORY_SEPARATOR.$this->nextRelease;
-        $releaseDir = rtrim($releaseDir, "/\\\t\n\r\0\x0B");
-
-        return $releaseDir;
-    }
-
-    /**
-     * Get the previous release directory
-     *
-     * @return null|string
-     */
-    protected function getPreviousReleaseDir()
-    {
-        $appDir = $this->getAppBaseDir();
-        $symLink = $this->getSymlinkConfigPath();
-        $currentRelease = $this->getCurrentReleaseDir();
-
-
-        if (!is_dir($appDir) || !$currentRelease) {
-            return null;
-        }
-
-        $lastVersion = null;
-
-        $dirListing = @scandir($appDir);
-
-        if ($dirListing && is_array($dirListing)) {
-            natsort($dirListing);
-
-            while (!$lastVersion && count($dirListing) > 0) {
-                $lastVersion = array_pop($dirListing);
-
-                if ($lastVersion == $symLink
-                    || strpos($lastVersion, '.') === 0
-                    || $lastVersion == $currentRelease
-                ) {
-                    $lastVersion = null;
-                }
-            }
-        }
-
-        if (empty($lastVersion)) {
-            return null;
-        }
-
-        $releaseDir = $this->getAppBaseDir().DIRECTORY_SEPARATOR.$lastVersion;
-        $releaseDir = rtrim($releaseDir, "/\\\t\n\r\0\x0B");
-
-        return $releaseDir;
-    }
-
-    /**
-     * Get the Pre Deploy hook for the application
-     *
-     * @return string|null
-     */
-    protected function getPreDeployHook()
-    {
-        return $this->getDeployHooks()->get('pre_deploy', null);
-    }
-
-    /**
-     * Get the Post Deploy hook for the application
-     *
-     * @return string|null
-     */
-    protected function getPostDeployHook()
-    {
-        return $this->getDeployHooks()->get('post_deploy', null);
-    }
-
-    /**
-     * Get the Pre Rollback hook for the application
-     *
-     * @return string|null
-     */
-    protected function getPreRollbackHook()
-    {
-        return $this->getDeployHooks()->get('pre_rollback', null);
-    }
-
-    /**
-     * Get the Post Rollback hook for the application
-     *
-     * @return string|null
-     */
-    protected function getPostRollbackHook()
-    {
-        return $this->getDeployHooks()->get('post_rollback', null);
-    }
-
-    /**
-     * Get all the deploy hooks for the application
-     *
-     * @return Config
-     */
-    protected function getDeployHooks()
-    {
-        return $this->getDeployConfig()->get('hooks', new Config(array()));
-    }
-
-    /**
-     * Get the config for deployment
-     *
-     * @return Config
-     */
-    protected function getDeployConfig()
-    {
-        return $this->getApplicationConfig()->get('deploy', new Config(array()));
-    }
-
-    /**
-     * Get the repository configs
-     *
-     * @return Config
-     */
-    protected function getRepositoryConfig()
-    {
-        return $this->getApplicationConfig()->get('repositories', new Config(array()));
-    }
-
-    /**
-     * Get the configured symlink path
-     *
-     * @return string
-     */
-    protected function getSymlinkConfigPath()
-    {
-        return $this->getDeployConfig()->get('symlink');
-    }
-
-    /**
-     * Get the Applications config
-     *
-     * @return Config
-     */
-    protected function getApplicationConfig()
-    {
-        return $this->appConfig;
-    }
-
-    /**
-     * Create a Directory
-     *
-     * @param string $dir Directory Path to create
-     *
-     * @return void
-     */
-    protected function createDirectory($dir)
-    {
-        $logger = $this->getLogger();
-
-        if (!is_dir($dir)) {
-            if (!mkdir($dir, 0777, true)) {
-                throw new \RuntimeException(
-                    "Unable to create directory: ".$dir
-                );
-            }
-            $logger->debug('Created Directory: '.$dir);
-        } else {
-            $logger->debug('Directory already exists: '.$dir);
-        }
-    }
-
-    /**
-     * Recursive remove directory.  Equivalent to `rm -Rf`
-     *
-     * @param string $dir Directory to remove
-     *
-     * @return bool
-     */
-    protected function delTree($dir)
-    {
-        if (!is_dir($dir) && !is_file($dir)) {
-            return true;
-        }
-
-        $files = array_diff(scandir($dir), array('.','..'));
-        foreach ($files as $file) {
-            (is_dir("$dir/$file")) ? $this->delTree("$dir/$file") : unlink("$dir/$file");
-        }
-
-        return rmdir($dir);
-    }
-
-    /**
-     * Get a single repository helper
-     *
-     * @param string $name Name or config key for Repo
-     *
-     * @return \Reliv\Deploy\Vcs\VcsInterface
-     */
-    protected function getRepoHelper($name)
-    {
-        $repositories = $this->getRepoHelpers();
-
-        if (!$repositories[$name]) {
-            return null;
-        }
-
-        return $repositories[$name];
-    }
-
-    /**
-     * Get all the Repo Helpers for the application.  If none are found use the application config to build them
-     *
-     * @return array
-     */
-    protected function getRepoHelpers()
-    {
-        if ($this->repositories) {
-            return $this->repositories;
-        }
-
-        $repositories = $this->getRepositoryConfig();
-
-        foreach ($repositories as $repoName => $repoConfig) {
-            $repoClass = $this->vcsMapper($repoConfig['type']);
-
-            if (!class_exists($repoClass) || !in_array('Reliv\Deploy\Vcs\VcsInterface', class_implements($repoClass))) {
-                throw new \RuntimeException(
-                    "Invalid Repository Type: ".$repoConfig['type']
-                );
-            }
-
-            /** @var \Reliv\Deploy\Vcs\VcsInterface $repoHelper */
-            $repoHelper = new $repoClass;
-            $repoHelper->setName($repoName);
-            $repoHelper->setConfig($repoConfig);
-            $repoHelper->setCurrentReleaseAppDir($this->getCurrentReleaseDir());
-            $repoHelper->setNextReleaseAppDir($this->getNewReleaseDir());
-            $repoHelper->setLoggerService($this->loggerService);
-
-            $this->repositories[$repoName] = $repoHelper;
-        }
-
-        return $this->repositories;
-    }
-
-    /**
-     * Vcs mapper.  Map a type to the correct helper class
-     *
-     * @param string $type Type of VCS to mapp
-     *
-     * @return string
-     */
-    protected function vcsMapper($type)
-    {
-        switch ($type) {
-            case 'git':
-            case 'Git':
-            case 'GIT':
-            case 'Reliv\Deploy\Vcs\GitRepo':
-                return 'Reliv\Deploy\Vcs\GitRepo';
-            default:
-                return $type;
-        }
-    }
 
     /**
      * Get PSR3 logger from the logger factory
@@ -758,5 +430,44 @@ class Application
     protected function getLoggerService()
     {
         return $this->loggerService;
+    }
+
+    /**
+     * Get the previous release directory
+     *
+     * @return null|string
+     * @todo Figure out where this should go
+     */
+    protected function getPreviousReleaseDir()
+    {
+        $releases = $this->getReleases();
+        $currentRelease = $this->appConfig->getCurrentReleaseDir();
+
+        if (!$currentRelease) {
+            return null;
+        }
+
+        $previousRelease = null;
+
+        while (!$previousRelease && count($releases) > 0) {
+            $release = array_pop($releases);
+
+            if ($release == $currentRelease) {
+                $previousRelease = array_pop($releases);
+            }
+        }
+
+        return $previousRelease;
+    }
+
+    /**
+     * Get a listing of all releases in the app directory
+     *
+     * @return array
+     */
+    protected function getReleases()
+    {
+        $appBaseDir = $this->appConfig->getAppBaseDir();
+        return $this->fileHelper->getReleases($appBaseDir);
     }
 }

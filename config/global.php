@@ -18,6 +18,7 @@ return array(
             'user' => 'www-data',
             'group' => 'www-data',
             'symlink' => 'current',
+            'revisions' => 2,
         )
     ),
 

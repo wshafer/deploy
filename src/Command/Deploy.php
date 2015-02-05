@@ -19,6 +19,9 @@
 
 namespace Reliv\Deploy\Command;
 
+use Reliv\Deploy\Helper\ApplicationServiceConfigHelper;
+use Reliv\Deploy\Helper\ApplicationServiceVcsHelper;
+use Reliv\Deploy\Helper\FileHelper;
 use Reliv\Deploy\Service\Application;
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
@@ -122,10 +125,16 @@ class Deploy extends CommandAbstract
      */
     protected function getApplicationHelper($name, Config $config)
     {
+        $appConfigHelper = new ApplicationServiceConfigHelper($config);
+        $fileHelper = new FileHelper();
+        $vcsHelper = new ApplicationServiceVcsHelper($appConfigHelper, $this->getLoggerService());
+
         $application = new Application(
             $name,
-            $config,
-            $this->getLoggerService()
+            $appConfigHelper,
+            $this->getLoggerService(),
+            $fileHelper,
+            $vcsHelper
         );
 
         return $application;
