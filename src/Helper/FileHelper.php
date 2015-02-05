@@ -40,7 +40,7 @@ class FileHelper
      */
     public function delTree($dir)
     {
-        if (!is_dir($dir) && !is_file($dir)) {
+        if (!is_dir($dir) && !is_file($dir) && !is_link($dir)) {
             return true;
         }
 
