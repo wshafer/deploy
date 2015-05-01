@@ -322,6 +322,7 @@ class Application
         $processLogger = $this->getProcessLogger($this->appName.'.'.$type);
 
         $process = new Process($hook);
+        $process->setTimeout(null);
         $process->setWorkingDirectory($workingDir);
 
         try {
